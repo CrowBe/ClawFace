@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>ClawFace — Hi-fi Prototype</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@500;600&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; padding: 0; background: #EEE9DA; font-family: -apple-system, system-ui, sans-serif; min-height: 100vh; }
+  body {
+    display: flex; align-items: center; justify-content: center;
+    padding: 40px 20px;
+    background:
+      radial-gradient(900px 600px at 20% -10%, rgba(200,83,28,0.08), transparent 60%),
+      radial-gradient(800px 600px at 100% 100%, rgba(63,138,91,0.06), transparent 60%),
+      #EEE9DA;
+  }
+  .workspace { display: flex; gap: 60px; align-items: center; flex-wrap: wrap; justify-content: center; }
+  .copy { max-width: 280px; font-family: -apple-system, system-ui, sans-serif; color: #48443D; }
+  .copy h1 { font-family: 'Fraunces', serif; font-size: 34px; font-weight: 600; margin: 0 0 6px; color: #1A1816; letter-spacing: -0.02em; }
+  .copy .sub { font-size: 11px; text-transform: uppercase; letter-spacing: 1.5px; color: #8A8474; margin-bottom: 16px; }
+  .copy p { font-size: 13px; line-height: 1.55; margin: 0 0 12px; }
+  .copy ul { font-size: 13px; padding-left: 16px; line-height: 1.6; margin: 0 0 12px; }
+  .copy .tag { display: inline-block; font-size: 10px; font-family: ui-monospace, Menlo, monospace; letter-spacing: 1px; background: #fff; padding: 3px 8px; border-radius: 6px; border: 1px solid #E7E2D3; color: #8A8474; margin-right: 4px; margin-bottom: 4px; }
+  /* phone */
+  .phone {
+    width: 390px; height: 844px;
+    background: #0A0A0A; border-radius: 56px;
+    padding: 10px; position: relative;
+    box-shadow: 0 0 0 1.5px #2A2824, 0 40px 80px rgba(0,0,0,0.25), 0 10px 30px rgba(0,0,0,0.15);
+  }
+  .phone::before {
+    content: ''; position: absolute; top: 12px; left: 50%; transform: translateX(-50%);
+    width: 118px; height: 34px; background: #000; border-radius: 22px; z-index: 100;
+  }
+  .phone-screen {
+    width: 100%; height: 100%; border-radius: 46px;
+    overflow: hidden; position: relative; background: #FAF7F0;
+  }
+  .statusbar {
+    position: absolute; top: 0; left: 0; right: 0; height: 54px;
+    padding: 18px 28px 0;
+    display: flex; justify-content: space-between;
+    font-size: 15px; font-weight: 600; color: #1A1816;
+    z-index: 50; pointer-events: none;
+  }
+  .app-root { position: absolute; inset: 0; padding-top: 54px; display: flex; flex-direction: column; }
+  .home-indicator {
+    position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%);
+    width: 134px; height: 5px; border-radius: 3px; background: rgba(0,0,0,0.35); z-index: 90;
+  }
+
+  @keyframes scan { 0%,100% { transform: translateY(-80px); } 50% { transform: translateY(80px); } }
+  @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes slideDown { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes dot { 0%, 60%, 100% { opacity: 0.3; transform: translateY(0); } 30% { opacity: 1; transform: translateY(-2px); } }
+</style>
+</head>
+<body>
+  <div class="workspace">
+    <div class="copy">
+      <div class="sub">ClawFace · v0.4 · hi-fi</div>
+      <h1>Your agents, in one thumb.</h1>
+      <p>A purpose-built mobile surface for headless coding agents like OpenClaw.</p>
+      <p>Tap Grep Norton → #auth-refactor to see an inline approval. Approve or deny; watch the Alerts tab badge update.</p>
+      <div>
+        <span class="tag">01 · agents+inbox</span>
+        <span class="tag">02 · threads</span>
+        <span class="tag">03 · chat</span>
+        <span class="tag">04 · pair</span>
+        <span class="tag">05 · switcher / config / alerts</span>
+      </div>
+    </div>
+    <div class="phone">
+      <div class="phone-screen">
+        <div class="statusbar">
+          <span>9:41</span>
+          <span style="display: flex; gap: 5px; align-items: center;">
+            <svg width="16" height="10" viewBox="0 0 18 12" fill="#1A1816"><rect x="0" y="5" width="3" height="7" rx="0.5"/><rect x="4.5" y="3" width="3" height="9" rx="0.5"/><rect x="9" y="1" width="3" height="11" rx="0.5"/><rect x="13.5" y="0" width="3" height="12" rx="0.5"/></svg>
+            <svg width="16" height="11" viewBox="0 0 18 12" fill="none" stroke="#1A1816" stroke-width="1.4"><path d="M1 5 Q9 -2 17 5"/><path d="M4 8 Q9 3 14 8"/><circle cx="9" cy="10.5" r="0.8" fill="#1A1816"/></svg>
+            <svg width="26" height="12" viewBox="0 0 28 12" fill="none" stroke="#1A1816" stroke-width="1"><rect x="0.5" y="0.5" width="23" height="11" rx="2.5"/><rect x="2" y="2" width="17" height="8" rx="1" fill="#1A1816"/><rect x="24.5" y="4" width="2" height="4" rx="0.6" fill="#1A1816"/></svg>
+          </span>
+        </div>
+        <div id="root" class="app-root"></div>
+        <div class="home-indicator"></div>
+      </div>
+    </div>
+  </div>
+
+  <script type="text/babel" src="cf-shell.jsx"></script>
+  <script type="text/babel" src="cf-screens.jsx"></script>
+  <script type="text/babel">
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<CFApp />);
+  </script>
+</body>
+</html>
