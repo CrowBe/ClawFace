@@ -1,43 +1,83 @@
 import React from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet,
+  View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, Share,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { useStore } from '@/store';
 import { Toggle } from '@/components/Toggle';
+import { Toast } from '@/components/Toast';
 import { BackIcon, ChevronRightIcon } from '@/components/Icons';
 import { C } from '@/constants/colors';
 
 export default function MeScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const [biometric, setBiometric] = React.useState(true);
-  const [pushNotifs, setPushNotifs] = React.useState(true);
+  const settings = useStore(s => s.settings);
+  const updateSettings = useStore(s => s.updateSettings);
+  const signOut = useStore(s => s.signOut);
+  const agents = useStore(s => s.agents);
+  const threads = useStore(s => s.threads);
+
+  const handleSignOut = () => {
+    Alert.alert(
+      'Sign out?',
+      'This removes all paired agents, deletes their session keys from this device, and clears local message history.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Sign out',
+          style: 'destructive',
+          onPress: () => {
+            signOut().then(() => router.replace('/')).catch(() => {});
+          },
+        },
+      ],
+    );
+  };
+
+  const handleExport = () => {
+    const payload = {
+      exportedAt: new Date().toISOString(),
+      agents: agents.map(a => ({ ...a, sessionKey: undefined })),
+      threads,
+    };
+    Share.share({
+      message: JSON.stringify(payload, null, 2),
+      title: 'ClawFace data export',
+    }).catch(() => {});
+  };
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
-      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity activeOpacity={0.7} onPress={() => router.back()} style={styles.navBtn}>
           <BackIcon color={C.ink2} />
         </TouchableOpacity>
       </View>
 
-      {/* Profile */}
       <View style={styles.profileBlock}>
         <View style={styles.profileAvatar}>
-          <Text style={styles.profileInitial}>N</Text>
+          <Text style={styles.profileInitial}>?</Text>
         </View>
         <View>
-          <Text style={styles.profileName}>Noah</Text>
-          <Text style={styles.profileEmail}>noah@example.com · Pro plan</Text>
+          <Text style={styles.profileName}>You</Text>
+          <Text style={styles.profileEmail}>not signed in</Text>
         </View>
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <Group title="Device">
-          <ToggleRow label="Biometric unlock" value={biometric} onChange={setBiometric} />
-          <ToggleRow label="Push notifications" value={pushNotifs} onChange={setPushNotifs} />
+          <ToggleRow
+            label="Biometric unlock"
+            value={settings.biometric}
+            onChange={v => updateSettings({ biometric: v })}
+          />
+          <ToggleRow
+            label="Push notifications"
+            value={settings.pushNotifs}
+            onChange={v => updateSettings({ pushNotifs: v })}
+          />
         </Group>
 
         <Group title="Appearance">
@@ -47,16 +87,18 @@ export default function MeScreen() {
 
         <Group title="Privacy & Security">
           <Row label="End-to-end encryption" value="Active ✓" />
-          <Row label="Key management" value="" chevron />
-          <Row label="Export my data" value="" chevron />
+          <Row label="Key management" value="" chevron onPress={() => router.push('/keys')} />
+          <Row label="Export my data" value="" chevron onPress={handleExport} />
         </Group>
 
         <Group title="About">
-          <Row label="Version" value="0.4.2" />
-          <Row label="Privacy policy" value="" chevron />
-          <Row label="Sign out" value="" chevron danger />
+          <Row label="Version" value="0.4.0" />
+          <Row label="Privacy policy" value="" chevron onPress={() => router.push('/privacy')} />
+          <Row label="Sign out" value="" chevron danger onPress={handleSignOut} />
         </Group>
       </ScrollView>
+
+      <Toast />
     </View>
   );
 }
@@ -70,21 +112,30 @@ function Group({ title, children }: { title: string; children: React.ReactNode }
   );
 }
 
-function Row({ label, value, chevron, danger }: {
+function Row({ label, value, chevron, danger, onPress }: {
   label: string;
   value: string;
   chevron?: boolean;
   danger?: boolean;
+  onPress?: () => void;
 }) {
-  return (
-    <View style={rowStyles.row}>
+  const content = (
+    <>
       <Text style={[rowStyles.label, danger && { color: C.danger }]}>{label}</Text>
       <View style={rowStyles.right}>
         {value ? <Text style={rowStyles.value}>{value}</Text> : null}
         {chevron && <ChevronRightIcon color={C.muted} />}
       </View>
-    </View>
+    </>
   );
+  if (onPress) {
+    return (
+      <TouchableOpacity activeOpacity={0.7} onPress={onPress} style={rowStyles.row}>
+        {content}
+      </TouchableOpacity>
+    );
+  }
+  return <View style={rowStyles.row}>{content}</View>;
 }
 
 function ToggleRow({ label, value, onChange }: {

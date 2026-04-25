@@ -1,13 +1,59 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { View, StatusBar } from 'react-native';
 import { Stack } from 'expo-router';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import * as Notifications from 'expo-notifications';
+import { useRouter } from 'expo-router';
 import { C } from '@/constants/colors';
+import { useStore } from '@/store';
+import { hydrateState } from '@/services/persistence';
+
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+    shouldShowBanner: true,
+    shouldShowList: true,
+  }),
+});
+
+function HydrationAndNotifications() {
+  const router = useRouter();
+
+  useEffect(() => {
+    hydrateState().then(saved => {
+      if (!saved) return;
+      const store = useStore.getState();
+      useStore.setState({
+        agents: saved.agents.length ? saved.agents : store.agents,
+        threads: saved.threads.length ? saved.threads : store.threads,
+        currentAgentId: saved.currentAgentId || store.currentAgentId,
+      });
+    }).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    const sub = Notifications.addNotificationResponseReceivedListener(response => {
+      const data = response.notification.request.content.data as {
+        agentId?: string;
+        threadId?: string;
+      };
+      if (data.agentId && data.threadId) {
+        router.push(`/chat/${data.agentId}/${data.threadId}`);
+      }
+    });
+    return () => sub.remove();
+  }, [router]);
+
+  return null;
+}
 
 export default function RootLayout() {
   return (
     <SafeAreaProvider>
       <StatusBar barStyle="dark-content" backgroundColor={C.bg} />
+      <HydrationAndNotifications />
       <Stack
         screenOptions={{
           headerShown: false,
@@ -22,6 +68,8 @@ export default function RootLayout() {
         <Stack.Screen name="config/[agentId]" />
         <Stack.Screen name="alerts" />
         <Stack.Screen name="me" />
+        <Stack.Screen name="privacy" />
+        <Stack.Screen name="keys" />
       </Stack>
     </SafeAreaProvider>
   );

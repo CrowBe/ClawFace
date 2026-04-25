@@ -12,6 +12,8 @@ export interface Agent {
   folders: boolean;
   perms: { read: PermValue; write: PermValue; shell: PermValue; network: PermValue };
   notifs: { approvals: string; completions: string; mentions: string };
+  sessionKey?: string;
+  port?: number;
 }
 
 export interface DiffLine {
@@ -57,7 +59,10 @@ export interface Alert {
   when: string;
 }
 
-export const SEED_AGENTS: Agent[] = [
+export const SEED_AGENTS: Agent[] = __DEV__ ? DEMO_AGENTS() : [];
+export const SEED_THREADS: Thread[] = __DEV__ ? DEMO_THREADS() : [];
+
+function DEMO_AGENTS(): Agent[] { return [
   {
     id: 'grep', name: 'Grep Norton', mono: 'GN', tint: '#EADFC5',
     role: 'code · detective', host: 'mbp-noah.local', online: true, paired: '12d', folders: false,
@@ -88,9 +93,9 @@ export const SEED_AGENTS: Agent[] = [
     perms: { read: true, write: 'ask', shell: false, network: false },
     notifs: { approvals: 'push', completions: 'silent', mentions: 'silent' },
   },
-];
+]; }
 
-export const SEED_THREADS: Thread[] = [
+function DEMO_THREADS(): Thread[] { return [
   {
     id: 'grep-1', agentId: 'grep', title: 'auth refactor', folder: 'Work',
     updatedMin: 2, unread: 1, preview: '"want me to rotate the secret?"',
@@ -188,4 +193,4 @@ export const SEED_THREADS: Thread[] = [
       { id: 1, role: 'agent', text: 'Notes archived in /docs/standups/2026-04-21.md', t: 'yday' },
     ],
   },
-];
+]; }

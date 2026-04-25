@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, TextInput, StyleSheet,
 } from 'react-native';
@@ -17,11 +17,28 @@ export default function ThreadsScreen() {
   const agents = useStore(s => s.agents);
   const threads = useStore(s => s.threads);
   const markThreadRead = useStore(s => s.markThreadRead);
+  const addThread = useStore(s => s.addThread);
 
   const [mode, setMode] = useState<'flat' | 'folders'>('flat');
+  const [search, setSearch] = useState('');
 
   const agent = agents.find(a => a.id === agentId);
-  const agentThreads = threads.filter(t => t.agentId === agentId);
+  const rawAgentThreads = threads.filter(t => t.agentId === agentId);
+  const agentThreads = search.trim()
+    ? rawAgentThreads.filter(t =>
+        t.title.toLowerCase().includes(search.toLowerCase()) ||
+        t.preview.toLowerCase().includes(search.toLowerCase())
+      )
+    : rawAgentThreads;
+
+  const handleNewThread = useCallback(async () => {
+    const { resolveTransport } = await import('@/services/transport');
+    if (!agent) return;
+    const transport = resolveTransport(agent);
+    const newThread = await transport.createThread(agentId);
+    addThread(newThread);
+    router.push(`/chat/${agentId}/${newThread.id}`);
+  }, [agent, agentId, addThread, router]);
 
   if (!agent) return null;
 
@@ -75,8 +92,16 @@ export default function ThreadsScreen() {
       {/* Search bar */}
       <View style={styles.searchBar}>
         <SearchIcon color={C.muted} size={16} />
-        <Text style={styles.searchPlaceholder}>Search threads</Text>
-        <TouchableOpacity>
+        <TextInput
+          style={styles.searchInput}
+          value={search}
+          onChangeText={setSearch}
+          placeholder="Search threads"
+          placeholderTextColor={C.muted}
+          returnKeyType="search"
+          autoCorrect={false}
+        />
+        <TouchableOpacity onPress={handleNewThread}>
           <Text style={styles.newThread}>+ new</Text>
         </TouchableOpacity>
       </View>
@@ -219,7 +244,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
   },
-  searchPlaceholder: { flex: 1, fontSize: 14, color: C.muted },
+  searchInput: { flex: 1, fontSize: 14, color: C.ink },
   newThread: { fontSize: 13, fontWeight: '500', color: C.accent },
   scroll: { paddingHorizontal: 16, paddingBottom: 20 },
   card: {
