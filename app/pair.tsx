@@ -20,6 +20,12 @@ interface PairingPayload {
   fingerprint: string;
   code: string;
   name?: string;
+  secure?: boolean;
+}
+
+function agentWsUrl(payload: PairingPayload, path: '/pair' | '/agent'): string {
+  const protocol = payload.secure ? 'wss' : 'ws';
+  return `${protocol}://${payload.host}:${payload.port}${path}`;
 }
 
 function parsePairingPayload(raw: string): PairingPayload | null {
@@ -74,7 +80,7 @@ export default function PairScreen() {
       const randomBytes = await Crypto.getRandomBytesAsync(32);
       const clientKey = Array.from(randomBytes).map(b => b.toString(16).padStart(2, '0')).join('');
 
-      const ws = new WebSocket(`ws://${payload.host}:${payload.port}/pair`);
+      const ws = new WebSocket(agentWsUrl(payload, '/pair'));
 
       await new Promise<void>((resolve, reject) => {
         const timer = setTimeout(() => {
@@ -92,7 +98,7 @@ export default function PairScreen() {
             const msg = JSON.parse(event.data as string) as Record<string, unknown>;
             if (msg.type === 'session' && typeof msg.sessionKey === 'string') {
               const name = payload.name ?? agentName;
-              const agent = addAgent(name || 'Agent', payload.host, msg.sessionKey, payload.port);
+              const agent = addAgent(name || 'Agent', payload.host, msg.sessionKey, payload.port, payload.secure);
               await setSessionKey(agent.id, msg.sessionKey);
               wsTransport.setSessionKey(agent.id, msg.sessionKey);
               setPairedAgentId(agent.id);
@@ -100,7 +106,7 @@ export default function PairScreen() {
 
               const pushToken = await registerForPushNotifications().catch(() => null);
               if (pushToken) {
-                const agentWs = new WebSocket(`ws://${payload.host}:${payload.port}/agent`);
+                const agentWs = new WebSocket(agentWsUrl(payload, '/agent'));
                 agentWs.onopen = () => {
                   agentWs.send(JSON.stringify({ type: 'hello', sessionKey: msg.sessionKey, clientVersion: '0.4.0' }));
                   agentWs.send(JSON.stringify({ type: 'register_push', token: pushToken }));
@@ -387,7 +393,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   pairingText: {
-    color: '#fff',
+    color: C.surface,
     fontSize: 16,
     fontWeight: '600',
   },
@@ -443,7 +449,7 @@ const styles = StyleSheet.create({
     width: '100%', padding: 12, borderRadius: 12,
     backgroundColor: C.ink, alignItems: 'center',
   },
-  doneBtnText: { color: '#fff', fontSize: 15, fontWeight: '600' },
+  doneBtnText: { color: C.surface, fontSize: 15, fontWeight: '600' },
   errorCard: {
     backgroundColor: C.surface,
     borderRadius: 24, padding: 20,
@@ -460,7 +466,7 @@ const styles = StyleSheet.create({
     padding: 12, borderRadius: 12,
     backgroundColor: C.ink, alignItems: 'center',
   },
-  confirmText: { color: '#fff', fontSize: 15, fontWeight: '600' },
+  confirmText: { color: C.surface, fontSize: 15, fontWeight: '600' },
   orDivider: {
     textAlign: 'center',
     paddingVertical: 18,

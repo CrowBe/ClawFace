@@ -178,7 +178,7 @@ function handleAgentSocket(ws) {
           preview: '',
           messages: [],
         };
-        ws.send(JSON.stringify({ type: 'thread', thread }));
+        ws.send(JSON.stringify({ type: 'thread', thread, clientRequestId: msg.clientRequestId }));
         break;
       }
 

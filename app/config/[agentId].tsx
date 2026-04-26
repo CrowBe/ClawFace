@@ -124,10 +124,14 @@ export default function ConfigScreen() {
                   text: 'Unpair',
                   style: 'destructive',
                   onPress: async () => {
-                    const { deleteSessionKey } = await import('@/services/secureStore');
-                    await deleteSessionKey(agentId);
-                    removeAgent(agentId);
-                    router.replace('/');
+                    try {
+                      const { deleteSessionKey } = await import('@/services/secureStore');
+                      await deleteSessionKey(agentId);
+                    } catch {
+                    } finally {
+                      removeAgent(agentId);
+                      router.replace('/');
+                    }
                   },
                 },
               ]

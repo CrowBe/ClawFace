@@ -14,8 +14,8 @@ export type TransportListener<T extends TransportEvent = TransportEvent> = (even
 export interface AgentTransport {
   connect(agent: Agent): Promise<void>;
   disconnect(agentId: string): void;
-  sendMessage(threadId: string, text: string): Promise<void>;
-  resolveApproval(threadId: string, msgId: number, decision: 'approved' | 'denied'): Promise<void>;
+  sendMessage(agentId: string, threadId: string, text: string): Promise<void>;
+  resolveApproval(agentId: string, threadId: string, msgId: number, decision: 'approved' | 'denied'): Promise<void>;
   createThread(agentId: string, title?: string): Promise<Thread>;
   subscribe(listener: TransportListener): () => void;
 }

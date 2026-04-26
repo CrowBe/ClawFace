@@ -7,8 +7,28 @@ interface OutboundMessage {
   payload: string;
 }
 
+interface PendingThreadRequest {
+  agentId: string;
+  timeout: ReturnType<typeof setTimeout>;
+  resolve: (thread: Thread) => void;
+  reject: (error: Error) => void;
+}
+
 const HEARTBEAT_INTERVAL_MS = 20_000;
 const MAX_BACKOFF_MS = 30_000;
+const DEFAULT_AGENT_PORT = 8765;
+const THREAD_CREATE_TIMEOUT_MS = 8_000;
+
+function buildWsUrl(host: string, port: number | undefined, path: string, secure?: boolean): string {
+  const protocol = secure ? 'wss' : 'ws';
+  const normalizedHost = host
+    .replace(/^wss?:\/\//, '')
+    .replace(/\/.*$/, '')
+    .replace(/:$/, '');
+  const hasPort = /:\d+$/.test(normalizedHost);
+  const authority = hasPort ? normalizedHost : `${normalizedHost}:${port ?? DEFAULT_AGENT_PORT}`;
+  return `${protocol}://${authority}${path.startsWith('/') ? path : `/${path}`}`;
+}
 
 export class WebSocketTransport implements AgentTransport {
   private sockets = new Map<string, WebSocket>();
@@ -20,6 +40,7 @@ export class WebSocketTransport implements AgentTransport {
   private reconnectAttempts = new Map<string, number>();
   private outboundBuffers = new Map<string, OutboundMessage[]>();
   private sessionKeys = new Map<string, string>();
+  private pendingThreadRequests = new Map<string, PendingThreadRequest>();
 
   subscribe(listener: TransportListener): () => void {
     this.listeners.add(listener);
@@ -44,8 +65,8 @@ export class WebSocketTransport implements AgentTransport {
     const agent = this.agents.get(agentId);
     if (!agent) return;
 
-    const sessionKey = this.sessionKeys.get(agentId) ?? '';
-    const url = `ws://${agent.host}/agent`;
+    const sessionKey = this.sessionKeys.get(agentId) ?? agent.sessionKey ?? '';
+    const url = buildWsUrl(agent.host, agent.port, '/agent', agent.secure);
     let ws: WebSocket;
 
     try {
@@ -116,6 +137,15 @@ export class WebSocketTransport implements AgentTransport {
       }
       case 'thread': {
         const thread = msg.thread as Thread;
+        const clientRequestId = msg.clientRequestId as string | undefined;
+        if (clientRequestId) {
+          const pending = this.pendingThreadRequests.get(clientRequestId);
+          if (pending) {
+            clearTimeout(pending.timeout);
+            this.pendingThreadRequests.delete(clientRequestId);
+            pending.resolve(thread);
+          }
+        }
         this.emit({ type: 'thread_updated', thread });
         break;
       }
@@ -196,33 +226,31 @@ export class WebSocketTransport implements AgentTransport {
       this.sockets.delete(agentId);
     }
     this.agents.delete(agentId);
+    this.sessionKeys.delete(agentId);
     this.states.set(agentId, 'disconnected');
     this.emit({ type: 'connection_changed', agentId, online: false });
   }
 
-  async sendMessage(threadId: string, text: string): Promise<void> {
+  async sendMessage(agentId: string, threadId: string, text: string): Promise<void> {
     const tempId = Date.now();
-    const [agentId] = threadId.split('-');
     this._send(agentId, { type: 'user_message', threadId, text, tempId });
   }
 
-  async resolveApproval(threadId: string, msgId: number, decision: 'approved' | 'denied'): Promise<void> {
-    const [agentId] = threadId.split('-');
+  async resolveApproval(agentId: string, threadId: string, msgId: number, decision: 'approved' | 'denied'): Promise<void> {
     this._send(agentId, { type: 'approval_decision', threadId, msgId, decision });
   }
 
   async createThread(agentId: string, title?: string): Promise<Thread> {
-    this._send(agentId, { type: 'create_thread', agentId, title });
-    const thread: Thread = {
-      id: `${agentId}-${Date.now()}`,
-      agentId,
-      title: title ?? 'New thread',
-      folder: null,
-      updatedMin: 0,
-      unread: 0,
-      preview: '',
-      messages: [],
-    };
-    return thread;
+    const clientRequestId = `${agentId}:${Date.now()}:${Math.random().toString(36).slice(2)}`;
+
+    return new Promise<Thread>((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        this.pendingThreadRequests.delete(clientRequestId);
+        reject(new Error('Timed out waiting for thread creation'));
+      }, THREAD_CREATE_TIMEOUT_MS);
+
+      this.pendingThreadRequests.set(clientRequestId, { agentId, timeout, resolve, reject });
+      this._send(agentId, { type: 'create_thread', agentId, title, clientRequestId });
+    });
   }
 }

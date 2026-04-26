@@ -14,6 +14,7 @@ export interface Agent {
   notifs: { approvals: string; completions: string; mentions: string };
   sessionKey?: string;
   port?: number;
+  secure?: boolean;
 }
 
 export interface DiffLine {

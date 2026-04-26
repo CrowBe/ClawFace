@@ -24,12 +24,7 @@ function HydrationAndNotifications() {
   useEffect(() => {
     hydrateState().then(saved => {
       if (!saved) return;
-      const store = useStore.getState();
-      useStore.setState({
-        agents: saved.agents.length ? saved.agents : store.agents,
-        threads: saved.threads.length ? saved.threads : store.threads,
-        currentAgentId: saved.currentAgentId || store.currentAgentId,
-      });
+      useStore.getState().rehydrateAndConnect(saved).catch(() => {});
     }).catch(() => {});
   }, []);
 

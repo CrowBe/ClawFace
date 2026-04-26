@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { SEED_AGENTS, SEED_THREADS, type Agent, type Thread, type Message } from '@/data/seed';
 import { mockTransport, wsTransport, resolveTransport } from '@/services/transport';
 import { debouncedDehydrate, clearPersistedState } from '@/services/persistence';
-import { deleteSessionKey } from '@/services/secureStore';
+import { deleteSessionKey, getSessionKey } from '@/services/secureStore';
 
 interface AppSettings {
   biometric: boolean;
@@ -25,7 +25,7 @@ interface State {
   toggleDrawer: (v?: boolean) => void;
   resolveApproval: (threadId: string, msgId: number, decision: 'approved' | 'denied') => void;
   sendMessage: (threadId: string, text: string) => void;
-  addAgent: (name: string, host: string, sessionKey?: string, port?: number) => Agent;
+  addAgent: (name: string, host: string, sessionKey?: string, port?: number, secure?: boolean) => Agent;
   removeAgent: (agentId: string) => void;
   markThreadRead: (threadId: string) => void;
   setAgentFolders: (agentId: string, v: boolean) => void;
@@ -34,6 +34,7 @@ interface State {
   updateSettings: (patch: Partial<AppSettings>) => void;
 
   signOut: () => Promise<void>;
+  rehydrateAndConnect: (saved: { agents: Agent[]; threads: Thread[]; currentAgentId: string }) => Promise<void>;
 
   appendMessage: (threadId: string, message: Message) => void;
   upsertMessage: (threadId: string, message: Message) => void;
@@ -136,7 +137,7 @@ export const useStore = create<State>((set, get) => ({
     const agent = get().agents.find(a => a.id === thread.agentId);
     if (!agent) return;
     const transport = resolveTransport(agent);
-    transport.resolveApproval(threadId, msgId, decision).catch(() => {});
+    transport.resolveApproval(agent.id, threadId, msgId, decision).catch(() => {});
   },
 
   sendMessage: (threadId, text) => {
@@ -154,10 +155,10 @@ export const useStore = create<State>((set, get) => ({
     const agent = get().agents.find(a => a.id === thread.agentId);
     if (!agent) return;
     const transport = resolveTransport(agent);
-    transport.sendMessage(threadId, text).catch(() => {});
+    transport.sendMessage(agent.id, threadId, text).catch(() => {});
   },
 
-  addAgent: (name, host, sessionKey, port) => {
+  addAgent: (name, host, sessionKey, port, secure) => {
     const id = 'agent-' + Date.now();
     const newAgent: Agent = {
       id, name, mono: name.slice(0, 2).toUpperCase(), tint: '#E4DBEC',
@@ -166,6 +167,7 @@ export const useStore = create<State>((set, get) => ({
       notifs: { approvals: 'push+sound', completions: 'silent', mentions: 'push' },
       sessionKey,
       port,
+      secure,
     };
     set(s => ({
       agents: [...s.agents, newAgent],
@@ -227,6 +229,26 @@ export const useStore = create<State>((set, get) => ({
     setTimeout(() => set({ toast: null }), 2000);
   },
 
+  rehydrateAndConnect: async (saved) => {
+    const store = get();
+    const agents = await Promise.all(
+      (saved.agents.length ? saved.agents : store.agents).map(async agent => {
+        const sessionKey = await getSessionKey(agent.id).catch(() => null);
+        if (!sessionKey) return { ...agent, sessionKey: undefined, online: false };
+        wsTransport.setSessionKey(agent.id, sessionKey);
+        const hydratedAgent = { ...agent, sessionKey, online: false };
+        wsTransport.connect(hydratedAgent).catch(() => {});
+        return hydratedAgent;
+      })
+    );
+
+    set({
+      agents,
+      threads: saved.threads.length ? saved.threads : store.threads,
+      currentAgentId: saved.currentAgentId || store.currentAgentId,
+    });
+  },
+
   appendMessage: (threadId, message) => set(s => ({
     threads: s.threads.map(t => {
       if (t.id !== threadId) return t;
@@ -271,7 +293,7 @@ subscribeToTransport(useStore);
 
 useStore.subscribe(state => {
   debouncedDehydrate({
-    agents: state.agents,
+    agents: state.agents.map(({ sessionKey: _sessionKey, ...agent }) => agent),
     threads: state.threads,
     currentAgentId: state.currentAgentId,
   });

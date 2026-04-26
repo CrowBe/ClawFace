@@ -21,7 +21,7 @@ export class MockTransport implements AgentTransport {
     this.emit({ type: 'connection_changed', agentId, online: false });
   }
 
-  async sendMessage(threadId: string, text: string): Promise<void> {
+  async sendMessage(_agentId: string, threadId: string, text: string): Promise<void> {
     setTimeout(() => {
       const msg: Message = {
         id: Date.now() + 1,
@@ -33,7 +33,7 @@ export class MockTransport implements AgentTransport {
     }, 900);
   }
 
-  async resolveApproval(threadId: string, msgId: number, decision: 'approved' | 'denied'): Promise<void> {
+  async resolveApproval(_agentId: string, threadId: string, msgId: number, decision: 'approved' | 'denied'): Promise<void> {
     const msg: Message = {
       id: Date.now(),
       role: 'agent',
