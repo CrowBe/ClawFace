@@ -100,7 +100,7 @@ Manual:
 
 ### CF-003 - Decide and implement clientKey usage
 
-**Status:** TODO
+**Status:** DONE
 **Priority:** P1
 **Epic:** A - Protocol & Wire Contract
 **Blocked by:** CF-001
@@ -113,10 +113,10 @@ Manual:
 
 #### Acceptance criteria
 
-- [ ] `scripts/dev-server.js` - compute `sessionKey = crypto.createHmac('sha256', 'dev-secret').update(msg.clientKey).digest('hex')`
-- [ ] `app/pair.tsx` - no logic change; add comment explaining `clientKey` purpose
-- [ ] `docs/PROTOCOL.md` - document HMAC derivation in the pairing section
-- [ ] End-to-end pairing with dev server still works
+- [x] `scripts/dev-server.js` - compute `sessionKey = crypto.createHmac('sha256', 'dev-secret').update(msg.clientKey).digest('hex')`
+- [x] `app/pair.tsx` - no logic change; add comment explaining `clientKey` purpose
+- [x] `docs/PROTOCOL.md` - document HMAC derivation in the pairing section
+- [x] End-to-end pairing with dev server still works
 
 #### Test plan
 
@@ -595,7 +595,7 @@ Integration:
 |---|---|---|---|---|
 | CF-001 | Document the wire protocol | P0 | DONE | - |
 | CF-002 | Verify server fingerprint during pairing | P1 | DONE | CF-001 |
-| CF-003 | Decide and implement clientKey usage | P1 | TODO | CF-001 |
+| CF-003 | Decide and implement clientKey usage | P1 | DONE | CF-001 |
 | CF-004 | Add reqId for approval replay protection | P0 | DONE | CF-001 |
 | CF-005 | Session revocation on unpair and sign-out | P1 | TODO | CF-001 |
 | CF-006 | Approval expiry (expiresAt) | P1 | TODO | CF-004 |
