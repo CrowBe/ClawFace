@@ -231,6 +231,14 @@ export class WebSocketTransport implements AgentTransport {
     this.emit({ type: 'connection_changed', agentId, online: false });
   }
 
+  async revoke(agentId: string): Promise<void> {
+    const ws = this.sockets.get(agentId);
+    if (ws?.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: 'revoke_session' }));
+    }
+    this.disconnect(agentId);
+  }
+
   async sendMessage(agentId: string, threadId: string, text: string): Promise<void> {
     const tempId = Date.now();
     this._send(agentId, { type: 'user_message', threadId, text, tempId });

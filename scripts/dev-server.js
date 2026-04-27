@@ -17,6 +17,8 @@ pendingPairCodes.set(ONE_TIME_CODE, true);
 
 const pushTokens = new Map();
 const seenApprovalReqIds = new Set();
+const activeSessionKeys = new Set();
+const revokedSessionKeys = new Set();
 
 function getLocalIp() {
   const ifaces = os.networkInterfaces();
@@ -49,6 +51,8 @@ function handlePairSocket(ws) {
       if (pendingPairCodes.has(msg.code)) {
         const sessionKey = crypto.createHmac('sha256', 'dev-secret').update(msg.clientKey).digest('hex');
         pendingPairCodes.delete(msg.code);
+        activeSessionKeys.add(sessionKey);
+        revokedSessionKeys.delete(sessionKey);
         ws.send(JSON.stringify({ type: 'session', sessionKey, fingerprint: 'dev-fp' }));
         console.log(`[pair] Paired. Session key issued.`);
       } else {
@@ -61,6 +65,7 @@ function handlePairSocket(ws) {
 
 function handleAgentSocket(ws) {
   let agentId = null;
+  let sessionKey = null;
   let pingTimer = null;
 
   ws.send(JSON.stringify({ type: 'ready' }));
@@ -71,6 +76,12 @@ function handleAgentSocket(ws) {
 
     switch (msg.type) {
       case 'hello':
+        if (revokedSessionKeys.has(msg.sessionKey) || !activeSessionKeys.has(msg.sessionKey)) {
+          ws.send(JSON.stringify({ type: 'error', error: 'Invalid or revoked session' }));
+          ws.close();
+          break;
+        }
+        sessionKey = msg.sessionKey;
         agentId = 'server-agent';
         console.log(`[agent] hello from client, version=${msg.clientVersion}`);
         break;
@@ -193,6 +204,15 @@ function handleAgentSocket(ws) {
       case 'register_push':
         if (agentId) pushTokens.set(agentId, msg.token);
         console.log(`[agent] push token registered: ${msg.token}`);
+        break;
+
+      case 'revoke_session':
+        if (sessionKey) {
+          activeSessionKeys.delete(sessionKey);
+          revokedSessionKeys.add(sessionKey);
+        }
+        console.log('[agent] session revoked');
+        ws.close();
         break;
 
       case 'ping':

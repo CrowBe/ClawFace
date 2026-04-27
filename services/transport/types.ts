@@ -24,6 +24,7 @@ export type ClientMessage =
   | { type: 'approval_decision'; threadId: string; msgId: number; reqId: string; decision: 'approved' | 'denied' }
   | { type: 'create_thread'; agentId: string; title?: string; clientRequestId: string }
   | { type: 'register_push'; token: string }
+  | { type: 'revoke_session' }
   | { type: 'ping' };
 
 export type PairClientMessage = { type: 'pair'; code: string; clientKey: string };
@@ -36,6 +37,7 @@ export type TransportListener<T extends TransportEvent = TransportEvent> = (even
 
 export interface AgentTransport {
   connect(agent: Agent): Promise<void>;
+  revoke(agentId: string): Promise<void>;
   disconnect(agentId: string): void;
   sendMessage(agentId: string, threadId: string, text: string): Promise<void>;
   resolveApproval(agentId: string, threadId: string, msgId: number, reqId: string, decision: 'approved' | 'denied'): Promise<void>;
