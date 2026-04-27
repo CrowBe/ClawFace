@@ -16,6 +16,7 @@ const pendingPairCodes = new Map();
 pendingPairCodes.set(ONE_TIME_CODE, true);
 
 const pushTokens = new Map();
+const seenApprovalReqIds = new Set();
 
 function getLocalIp() {
   const ifaces = os.networkInterfaces();
@@ -115,12 +116,14 @@ function handleAgentSocket(ws) {
 
               setTimeout(() => {
                 const approvalId = Date.now() + 20;
+                const reqId = crypto.randomUUID();
                 ws.send(JSON.stringify({
                   type: 'approval_request',
                   threadId,
                   message: {
                     id: approvalId,
                     role: 'approval',
+                    reqId,
                     tool: 'write_files',
                     summary: 'Write 1 file',
                     risk: 'write',
@@ -132,7 +135,7 @@ function handleAgentSocket(ws) {
                     t: 'now',
                   },
                 }));
-                console.log(`[agent] sent approval_request id=${approvalId}`);
+                console.log(`[agent] sent approval_request id=${approvalId} reqId=${reqId}`);
               }, 500);
             }, 300);
 
@@ -154,7 +157,12 @@ function handleAgentSocket(ws) {
       }
 
       case 'approval_decision':
-        console.log(`[agent] approval decision: ${msg.decision} for msgId=${msg.msgId}`);
+        if (seenApprovalReqIds.has(msg.reqId)) {
+          console.log(`[agent] duplicate approval decision ignored reqId=${msg.reqId}`);
+          break;
+        }
+        seenApprovalReqIds.add(msg.reqId);
+        console.log(`[agent] approval decision: ${msg.decision} for msgId=${msg.msgId} reqId=${msg.reqId}`);
         ws.send(JSON.stringify({
           type: 'message',
           threadId: msg.threadId,

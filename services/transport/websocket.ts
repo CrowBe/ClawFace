@@ -236,8 +236,8 @@ export class WebSocketTransport implements AgentTransport {
     this._send(agentId, { type: 'user_message', threadId, text, tempId });
   }
 
-  async resolveApproval(agentId: string, threadId: string, msgId: number, decision: 'approved' | 'denied'): Promise<void> {
-    this._send(agentId, { type: 'approval_decision', threadId, msgId, decision });
+  async resolveApproval(agentId: string, threadId: string, msgId: number, reqId: string, decision: 'approved' | 'denied'): Promise<void> {
+    this._send(agentId, { type: 'approval_decision', threadId, msgId, reqId, decision });
   }
 
   async createThread(agentId: string, title?: string): Promise<Thread> {

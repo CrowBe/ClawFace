@@ -21,7 +21,7 @@ export type ServerMessage =
 export type ClientMessage =
   | { type: 'hello'; sessionKey: string; clientVersion: string }
   | { type: 'user_message'; threadId: string; text: string; tempId: number }
-  | { type: 'approval_decision'; threadId: string; msgId: number; decision: 'approved' | 'denied' }
+  | { type: 'approval_decision'; threadId: string; msgId: number; reqId: string; decision: 'approved' | 'denied' }
   | { type: 'create_thread'; agentId: string; title?: string; clientRequestId: string }
   | { type: 'register_push'; token: string }
   | { type: 'ping' };
@@ -38,7 +38,7 @@ export interface AgentTransport {
   connect(agent: Agent): Promise<void>;
   disconnect(agentId: string): void;
   sendMessage(agentId: string, threadId: string, text: string): Promise<void>;
-  resolveApproval(agentId: string, threadId: string, msgId: number, decision: 'approved' | 'denied'): Promise<void>;
+  resolveApproval(agentId: string, threadId: string, msgId: number, reqId: string, decision: 'approved' | 'denied'): Promise<void>;
   createThread(agentId: string, title?: string): Promise<Thread>;
   subscribe(listener: TransportListener): () => void;
 }
