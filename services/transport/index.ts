@@ -20,6 +20,13 @@ export const mockTransport = new MockTransport();
 export const wsTransport = new WebSocketTransport();
 
 export function resolveTransport(agent: Agent): AgentTransport {
+  const mode = agent.mode ?? 'direct';
+
+  if (mode === 'relay') {
+    console.warn('Relay transport is not implemented yet; falling back to WebSocket transport.');
+    return wsTransport;
+  }
+
   if (agent.sessionKey) {
     return wsTransport;
   }

@@ -121,7 +121,8 @@ Important current boundary:
 
 - ClawFace is currently a mobile client plus local mock/dev server.
 - There is no production hosted relay/control plane yet.
-- There is no explicit `direct` vs `relay` transport mode in the persisted agent model yet; CF-008 tracks that work.
+- The persisted agent model has an explicit `mode: 'direct' | 'relay'` field plus optional `relayUrl`; direct mode is the implemented/local path.
+- Relay transport is not implemented yet. Relay-mode agents currently fall back to the existing WebSocket transport with a warning until the hosted relay/control plane exists.
 - Hosted architecture described here is the target shape for future work, not shipped behaviour.
 
 ---

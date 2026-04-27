@@ -312,7 +312,7 @@ Manual (Android):
 
 ### CF-008 - Explicit transport mode: direct vs relay
 
-**Status:** TODO
+**Status:** DONE
 **Priority:** P2
 **Epic:** D - Architecture Boundaries
 
@@ -326,11 +326,11 @@ This issue establishes the boundary in the type system. No relay transport is im
 
 #### Acceptance criteria
 
-- [ ] `data/seed.ts` - `Agent` gains `mode: 'direct' | 'relay'` and `relayUrl?: string`; seed agents set `mode: 'direct'`
-- [ ] `store/index.ts` `addAgent` - sets `mode: 'direct'`
-- [ ] `services/transport/index.ts` `resolveTransport` - checks `agent.mode`; `'relay'` logs a console warning and falls back to `wsTransport`
-- [ ] `docs/ARCHITECTURE.md` section 2B still documents node-per-user/workspace relay as the preferred deployment pattern
-- [ ] `docs/ARCHITECTURE.md` section 3 updated to note the implemented `mode` field and that relay transport is not yet implemented
+- [x] `data/seed.ts` - `Agent` gains `mode: 'direct' | 'relay'` and `relayUrl?: string`; seed agents set `mode: 'direct'`
+- [x] `store/index.ts` `addAgent` - sets `mode: 'direct'`
+- [x] `services/transport/index.ts` `resolveTransport` - checks `agent.mode`; `'relay'` logs a console warning and falls back to `wsTransport`
+- [x] `docs/ARCHITECTURE.md` section 2B still documents node-per-user/workspace relay as the preferred deployment pattern
+- [x] `docs/ARCHITECTURE.md` section 3 updated to note the implemented `mode` field and that relay transport is not yet implemented
 
 #### Test plan
 
@@ -600,7 +600,7 @@ Integration:
 | CF-005 | Session revocation on unpair and sign-out | P1 | DONE | CF-001 |
 | CF-006 | Approval expiry (expiresAt) | P1 | DONE | CF-004 |
 | CF-007 | Push notification tap routing | P1 | DONE | - |
-| CF-008 | Explicit transport mode: direct vs relay | P2 | TODO | - |
+| CF-008 | Explicit transport mode: direct vs relay | P2 | DONE | - |
 | CF-009 | Persistence schema migration | P2 | TODO | CF-008 |
 | CF-010 | Agent-side component architecture spec | P0 | DONE | CF-001 |
 | CF-011 | Headless browser tool interface | P1 | DONE | CF-010 |
