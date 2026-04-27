@@ -461,7 +461,7 @@ Human review: each interface in `agent/interfaces/` maps to a section in `docs/A
 
 ### CF-011 - Headless browser tool interface
 
-**Status:** TODO
+**Status:** DONE
 **Priority:** P1
 **Epic:** E - Agent-Side Component Architecture
 **Blocked by:** CF-010
@@ -474,16 +474,16 @@ Lightpanda is CDP-compatible and 9x faster / 16x less memory than Chrome headles
 
 #### Acceptance criteria
 
-- [ ] `agent/interfaces/browser.ts` defines `BrowserTool` extending `ToolProvider` with:
+- [x] `agent/interfaces/browser.ts` defines `BrowserTool` extending `ToolProvider` with:
   - `navigate(url: string): Promise<PageSnapshot>`
   - `extract(selector: string): Promise<string>`
   - `click(selector: string): Promise<void>`
   - `type(selector: string, text: string): Promise<void>`
   - `screenshot(): Promise<Buffer>`
-- [ ] `agent/tools/browser-lightpanda.ts` - Lightpanda implementation using CDP (`chrome-remote-interface` or equivalent)
-- [ ] `agent/tools/browser-mock.ts` - mock implementation returning static fixtures; used in tests
-- [ ] Swapping `browser-lightpanda` for `browser-mock` (or Playwright) requires only changing the import in the harness config - no interface changes
-- [ ] `docs/AGENT_ARCHITECTURE.md` updated: browser section notes Lightpanda as default, Playwright as drop-in alternative
+- [x] `agent/tools/browser-lightpanda.ts` - Lightpanda implementation using CDP (`chrome-remote-interface` or equivalent)
+- [x] `agent/tools/browser-mock.ts` - mock implementation returning static fixtures; used in tests
+- [x] Swapping `browser-lightpanda` for `browser-mock` (or Playwright) requires only changing the import in the harness config - no interface changes
+- [x] `docs/AGENT_ARCHITECTURE.md` updated: browser section notes Lightpanda as default, Playwright as drop-in alternative
 
 #### Test plan
 
@@ -603,6 +603,6 @@ Integration:
 | CF-008 | Explicit transport mode: direct vs relay | P2 | TODO | - |
 | CF-009 | Persistence schema migration | P2 | TODO | CF-008 |
 | CF-010 | Agent-side component architecture spec | P0 | DONE | CF-001 |
-| CF-011 | Headless browser tool interface | P1 | TODO | CF-010 |
+| CF-011 | Headless browser tool interface | P1 | DONE | CF-010 |
 | CF-012 | Model provider interface | P1 | TODO | CF-010 |
 | CF-013 | MCP server integration interface | P1 | TODO | CF-010 |

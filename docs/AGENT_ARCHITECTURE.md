@@ -129,9 +129,11 @@ Responsibilities:
 
 Candidate implementations:
 
-- Lightpanda for low-resource CDP-compatible browsing
-- Playwright for broad compatibility
-- mock browser for tests and deterministic fixtures
+- Lightpanda for low-resource CDP-compatible browsing; the default implementation in `agent/tools/browser-lightpanda.ts` talks to a Lightpanda CDP endpoint and implements the generic `ToolProvider` tool names
+- Playwright for broad compatibility; it should satisfy the same `BrowserTool` interface without changing harness code
+- mock browser for tests and deterministic fixtures; `agent/tools/browser-mock.ts` provides static HTML snapshots and deterministic screenshot bytes
+
+Swapping Lightpanda for Playwright or the mock browser should be a harness configuration/import choice only. The harness should depend on `BrowserTool`, not on browser-engine-specific APIs.
 
 ### 3.5 `McpServer`
 
@@ -168,7 +170,7 @@ These files are intentionally separate from the Expo app source. They define an 
 
 ## 5. Future implementation notes
 
-- CF-011 should implement `BrowserTool` using Lightpanda and a mock, while preserving Playwright as a drop-in alternative.
+- CF-011 implements `BrowserTool` using Lightpanda and a mock, while preserving Playwright as a drop-in alternative.
 - CF-012 should add real provider adapters without changing `HarnessAdapter`.
 - CF-013 should add the concrete MCP server/registry and route all tool calls through it.
 - Approval request IDs, expiry, and revocation must continue to follow `docs/PROTOCOL.md` and `docs/ARCHITECTURE.md`.

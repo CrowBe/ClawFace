@@ -12,5 +12,5 @@ export interface BrowserTool extends ToolProvider {
   extract(selector: string): Promise<string>;
   click(selector: string): Promise<void>;
   type(selector: string, text: string): Promise<void>;
-  screenshot(): Promise<Uint8Array>;
+  screenshot(): Promise<Buffer>;
 }
