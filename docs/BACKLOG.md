@@ -506,7 +506,7 @@ Integration (requires Lightpanda binary):
 
 ### CF-012 - Model provider interface
 
-**Status:** TODO
+**Status:** DONE
 **Priority:** P1
 **Epic:** E - Agent-Side Component Architecture
 **Blocked by:** CF-010
@@ -517,14 +517,14 @@ Define a `ModelProvider` interface that abstracts over LLM backends. Users suppl
 
 #### Acceptance criteria
 
-- [ ] `agent/interfaces/model.ts` defines `ModelProvider` with:
+- [x] `agent/interfaces/model.ts` defines `ModelProvider` with:
   - `complete(messages: Message[], tools: ToolSpec[]): AsyncIterable<CompletionChunk>` (streaming)
   - `modelId: string`
   - `provider: 'anthropic' | 'openai' | 'google' | 'ollama' | string`
-- [ ] `agent/providers/anthropic.ts` - Anthropic implementation using the Anthropic SDK
-- [ ] `agent/providers/openai.ts` - OpenAI-compatible implementation (also covers Ollama via base URL override)
-- [ ] Provider is selected via config (environment variable or harness config file) - no harness code change required to switch
-- [ ] `docs/AGENT_ARCHITECTURE.md` updated: model section notes config-driven provider selection and pi compatibility
+- [x] `agent/providers/anthropic.ts` - Anthropic implementation using the Anthropic SDK
+- [x] `agent/providers/openai.ts` - OpenAI-compatible implementation (also covers Ollama via base URL override)
+- [x] Provider is selected via config (environment variable or harness config file) - no harness code change required to switch
+- [x] `docs/AGENT_ARCHITECTURE.md` updated: model section notes config-driven provider selection and pi compatibility
 
 #### Test plan
 
@@ -604,5 +604,5 @@ Integration:
 | CF-009 | Persistence schema migration | P2 | TODO | CF-008 |
 | CF-010 | Agent-side component architecture spec | P0 | DONE | CF-001 |
 | CF-011 | Headless browser tool interface | P1 | DONE | CF-010 |
-| CF-012 | Model provider interface | P1 | TODO | CF-010 |
+| CF-012 | Model provider interface | P1 | DONE | CF-010 |
 | CF-013 | MCP server integration interface | P1 | TODO | CF-010 |
