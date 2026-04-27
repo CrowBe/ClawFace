@@ -2,6 +2,13 @@
 
 Mobile agentic-workflow client — a single app for managing multiple AI coding agents (OpenClaw, Claude Code, etc.) with per-agent threads, inline approvals, and QR pairing. Aims to replace ad-hoc use of Telegram/WhatsApp for agent I/O.
 
+## Documentation source of truth
+
+- [README.md](README.md) is the project overview and setup entry point.
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) is the canonical architecture, product-surface, trust-boundary, pairing/session, approval, and hosted-vs-local responsibility document.
+- [docs/SCALING_AND_UNIT_ECONOMICS.md](docs/SCALING_AND_UNIT_ECONOMICS.md) covers market positioning, business model, cost drivers, quotas, abuse controls, and scaling scenarios.
+- Do not create overlapping architecture/business planning docs. Update the canonical doc for the concern instead.
+
 ## Stack
 
 - **Expo ~54** + **React Native 0.81** + **React 19** (new architecture enabled)
@@ -9,7 +16,7 @@ Mobile agentic-workflow client — a single app for managing multiple AI coding 
 - **zustand ^5** — single store at [store/index.ts](store/index.ts)
 - **react-native-svg** — all icons are inline SVG components
 - **TypeScript strict** — path alias `@/*` → repo root (see [tsconfig.json](tsconfig.json))
-- No testing setup, no linter config, no native modules beyond Expo defaults
+- No formal test runner or linter config yet; TypeScript typecheck is the current lightweight validation gate
 
 ## Running
 
@@ -43,7 +50,7 @@ The tab bar ("Agents / Alerts / Me") is rendered inline in [app/index.tsx](app/i
 
 ## State
 
-Single zustand store: [store/index.ts](store/index.ts). State is initialized from seed data in [data/seed.ts](data/seed.ts) — there's no persistence or backend yet. Key shape:
+Single zustand store: [store/index.ts](store/index.ts). State is initialized from seed data in [data/seed.ts](data/seed.ts), then hydrated from AsyncStorage via [services/persistence.ts](services/persistence.ts). Session keys live in SecureStore via [services/secureStore.ts](services/secureStore.ts) and should not be persisted in AsyncStorage. Key shape:
 
 - `agents: Agent[]` — paired agents with `perms` (`read`/`write`/`shell`/`network`, each `true | false | 'ask'`) and `notifs`
 - `threads: Thread[]` — each thread has `messages: Message[]` where a message is one of `user | agent | tool | approval`
@@ -61,13 +68,13 @@ Safe-area handling: screens call `useSafeAreaInsets()` and apply padding manuall
 
 ## Status & direction
 
-- **UI polish and real backend are both in scope.** Design parity with the original mockups is close but not final; replacing the seed store with real agent/thread data is the next major thrust.
-- Approvals, pairing, and messaging are all fake (setTimeout stubs). A real backend would replace the mutation handlers in [store/index.ts](store/index.ts) — the component tree already reads from selectors, so the UI shouldn't need to change much.
+- **UI polish and real agent transport are both in scope.** Design parity with the original mockups is close but not final; hardening the real pairing/transport path is the next major thrust.
+- The app now has AsyncStorage persistence, SecureStore session-key handling, WebSocket transport, and a bundled dev pairing server. Treat the dev server as local test infrastructure, not production hosted architecture.
+- Future hosted relay/control-plane work must follow [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/SCALING_AND_UNIT_ECONOMICS.md](docs/SCALING_AND_UNIT_ECONOMICS.md). Do not duplicate those decisions here.
 
 ## Ignore
 
 - `project/` and `chats/` — the original Claude Design handoff bundle (HTML prototypes + chat transcripts). Treated as archive. The RN code in `app/`, `components/`, `store/`, `data/` is canonical; don't cross-reference the mockups for new work.
-- [README.md](README.md) — written for the original handoff; superseded by this file.
 - [App.tsx](App.tsx) — stale Expo template, not in the render tree.
 
 ## Conventions
