@@ -184,7 +184,7 @@ Manual:
 
 ### CF-005 - Session revocation on unpair and sign-out
 
-**Status:** TODO
+**Status:** DONE
 **Priority:** P1
 **Epic:** B - Trust & Safety
 **Blocked by:** CF-001
@@ -197,12 +197,12 @@ Fix: send `{ type: 'revoke_session' }` before disconnect. Server invalidates the
 
 #### Acceptance criteria
 
-- [ ] `services/transport/types.ts` - add `revoke(agentId: string): Promise<void>` to `AgentTransport`
-- [ ] `services/transport/mock.ts` - `revoke` stub emits `connection_changed` offline
-- [ ] `services/transport/websocket.ts` - `revoke(agentId)` sends `revoke_session` if connected then calls `disconnect`
-- [ ] `store/index.ts` - `removeAgent` calls `transport.revoke`; `signOut` calls `wsTransport.revoke` per agent
-- [ ] `scripts/dev-server.js` - handles `revoke_session`: logs, closes socket; rejects subsequent `hello` with same key
-- [ ] `docs/PROTOCOL.md` updated with `revoke_session`
+- [x] `services/transport/types.ts` - add `revoke(agentId: string): Promise<void>` to `AgentTransport`
+- [x] `services/transport/mock.ts` - `revoke` stub emits `connection_changed` offline
+- [x] `services/transport/websocket.ts` - `revoke(agentId)` sends `revoke_session` if connected then calls `disconnect`
+- [x] `store/index.ts` - `removeAgent` calls `transport.revoke`; `signOut` calls `wsTransport.revoke` per agent
+- [x] `scripts/dev-server.js` - handles `revoke_session`: logs, closes socket; rejects subsequent `hello` with same key
+- [x] `docs/PROTOCOL.md` updated with `revoke_session`
 
 #### Test plan
 
@@ -597,7 +597,7 @@ Integration:
 | CF-002 | Verify server fingerprint during pairing | P1 | DONE | CF-001 |
 | CF-003 | Decide and implement clientKey usage | P1 | DONE | CF-001 |
 | CF-004 | Add reqId for approval replay protection | P0 | DONE | CF-001 |
-| CF-005 | Session revocation on unpair and sign-out | P1 | TODO | CF-001 |
+| CF-005 | Session revocation on unpair and sign-out | P1 | DONE | CF-001 |
 | CF-006 | Approval expiry (expiresAt) | P1 | TODO | CF-004 |
 | CF-007 | Push notification tap routing | P1 | TODO | - |
 | CF-008 | Explicit transport mode: direct vs relay | P2 | TODO | - |
