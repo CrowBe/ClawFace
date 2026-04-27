@@ -75,10 +75,10 @@ Human review: every `ws.send(...)` in `scripts/dev-server.js` and every `case` i
 
 #### Acceptance criteria
 
-- [ ] `app/pair.tsx` - in `ws.onmessage` session branch (~line 99), check fingerprint; reject on mismatch
-- [ ] `scripts/dev-server.js` - `handlePairSocket` includes `fingerprint: 'dev-fp'` in `session` response
-- [ ] Pairing with dev server succeeds end-to-end
-- [ ] `docs/PROTOCOL.md` updated: `session` response schema includes `fingerprint`
+- [x] `app/pair.tsx` - in `ws.onmessage` session branch (~line 99), check fingerprint; reject on mismatch
+- [x] `scripts/dev-server.js` - `handlePairSocket` includes `fingerprint: 'dev-fp'` in `session` response
+- [x] Pairing with dev server succeeds end-to-end
+- [x] `docs/PROTOCOL.md` updated: `session` response schema includes `fingerprint`
 
 #### Test plan
 
@@ -594,7 +594,7 @@ Integration:
 | Key | Title | Priority | Status | Blocked by |
 |---|---|---|---|---|
 | CF-001 | Document the wire protocol | P0 | DONE | - |
-| CF-002 | Verify server fingerprint during pairing | P1 | TODO | CF-001 |
+| CF-002 | Verify server fingerprint during pairing | P1 | DONE | CF-001 |
 | CF-003 | Decide and implement clientKey usage | P1 | TODO | CF-001 |
 | CF-004 | Add reqId for approval replay protection | P0 | DONE | CF-001 |
 | CF-005 | Session revocation on unpair and sign-out | P1 | TODO | CF-001 |
