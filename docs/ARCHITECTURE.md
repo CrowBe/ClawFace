@@ -3,18 +3,24 @@
 Status: Draft
 Created: 2026-04-27
 
-This is the canonical architecture document for ClawFace. If another document describes product structure, trust boundaries, pairing, relay behaviour, approvals, or hosted-vs-local responsibilities, it should defer to this file instead of repeating architecture details.
+This is the canonical product architecture document for ClawFace. If another document describes product surfaces, trust boundaries, relay responsibilities, approval safety, or hosted-vs-local responsibilities, it should defer to this file instead of repeating architecture decisions.
 
 Related documents:
 
 - `README.md` — project overview and development setup
 - `CLAUDE.md` — coding-agent handoff notes and repo conventions
+- `docs/BACKLOG.md` — executable work backlog; not a source of architectural truth
 - `docs/SCALING_AND_UNIT_ECONOMICS.md` — business model, cost drivers, quotas, and scaling considerations
+- `docs/PROTOCOL.md` — future canonical wire-protocol spec once CF-001 is complete
+- `docs/AGENT_ARCHITECTURE.md` — future canonical agent-side component spec once CF-010 is complete
 
 Source-of-truth rule:
 
-- architecture, trust boundaries, pairing/session semantics, approval semantics, and hosted/local responsibilities live here
+- product architecture, trust boundaries, relay responsibilities, approval safety requirements, and hosted/local responsibilities live here
+- concrete WebSocket message schemas and ordering guarantees will live in `docs/PROTOCOL.md` after CF-001
+- agent-side harness/component internals will live in `docs/AGENT_ARCHITECTURE.md` after CF-010
 - business model, pricing assumptions, quotas, cost traps, and scaling economics live in `docs/SCALING_AND_UNIT_ECONOMICS.md`
+- `docs/BACKLOG.md` should describe work to do and link to the canonical docs; it should not become a competing architecture spec
 - `README.md` and `CLAUDE.md` may summarize and link, but should not redefine these decisions
 
 ---
@@ -76,6 +82,13 @@ Properties:
 - does not become a plaintext transcript/log store by default
 - does not proxy large artifacts unless deliberately designed and priced
 
+Preferred deployment pattern:
+
+- direct/local mode remains the default trust baseline
+- hosted relay should prefer isolated relay nodes scoped to one user account or workspace over shared multi-tenant relay infrastructure
+- a node-per-user/workspace relay keeps cross-user routing metadata and connection state out of a shared hot path
+- shared relay infrastructure is not forbidden, but it needs an explicit privacy, cost, and operational justification before implementation
+
 ### C. Native app surface
 
 Purpose:
@@ -108,6 +121,7 @@ Important current boundary:
 
 - ClawFace is currently a mobile client plus local mock/dev server.
 - There is no production hosted relay/control plane yet.
+- There is no explicit `direct` vs `relay` transport mode in the persisted agent model yet; CF-008 tracks that work.
 - Hosted architecture described here is the target shape for future work, not shipped behaviour.
 
 ---
@@ -198,6 +212,7 @@ The hosted control plane may reasonably know:
 - account IDs
 - device IDs
 - agent IDs/names
+- relay node/workspace identity
 - connection presence
 - notification routing metadata
 - approval request IDs and statuses
@@ -229,7 +244,7 @@ Non-negotiables:
 5. Pairing must be explicit, revocable, and auditable.
 6. Push notifications must carry minimal sensitive content.
 7. Local-first/direct pairing remains valuable even if a hosted relay exists.
-8. Expensive behaviours such as always-on relay, long retention, audit logs, and large payload sync must be explicit plan features, not accidental defaults.
+8. Expensive behaviours such as always-on relay, isolated relay nodes, long retention, audit logs, and large payload sync must be explicit plan features, not accidental defaults.
 
 ---
 

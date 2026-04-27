@@ -12,8 +12,9 @@ ClawFace is an Expo mobile client for monitoring and controlling paired OpenClaw
 
 ## Documentation
 
-- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) is the canonical architecture and trust-boundary plan.
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) is the canonical product architecture and trust-boundary plan.
 - [`docs/SCALING_AND_UNIT_ECONOMICS.md`](docs/SCALING_AND_UNIT_ECONOMICS.md) covers business model, cost drivers, quotas, and scaling considerations.
+- [`docs/BACKLOG.md`](docs/BACKLOG.md) tracks the architecture execution backlog; it should link back to canonical docs rather than become a competing source of truth.
 
 ## Development
 

@@ -2,8 +2,13 @@
 
 Each issue is self-contained: an agent can read it, implement the change, validate with the test plan, commit, and open a PR without further context. Issues link to their blocking dependencies. Complete blocking issues first.
 
+This file is an executable backlog, not a source of architectural truth. When an issue creates or changes architecture, protocol, economics, or agent-component decisions, update the canonical document listed below rather than duplicating the decision here.
+
 Related docs:
-- `docs/ARCHITECTURE.md` - canonical architecture and trust boundary decisions
+- `docs/ARCHITECTURE.md` - canonical product architecture, trust boundary, relay, approval-safety, and hosted/local responsibility decisions
+- `docs/SCALING_AND_UNIT_ECONOMICS.md` - canonical business model, quota, cost, abuse-control, and scaling considerations
+- `docs/PROTOCOL.md` - future canonical wire protocol once CF-001 is complete
+- `docs/AGENT_ARCHITECTURE.md` - future canonical agent-side component architecture once CF-010 is complete
 - `services/transport/types.ts` - TypeScript transport interface
 - `scripts/dev-server.js` - local dev server (reference agent implementation)
 
@@ -315,7 +320,7 @@ Manual (Android):
 
 `resolveTransport` (`services/transport/index.ts`) selects transport based on `agent.sessionKey` presence only. There is no "direct" vs "relay" distinction in the type system. When a hosted relay exists, `agent.host` won't be directly reachable.
 
-**Preferred relay deployment pattern:** Provision a dedicated relay node per user account (analogous to Anthropic's managed agent pattern where each user gets an isolated node). This preserves the same privacy story as local-first: no shared relay infrastructure sees cross-user routing metadata or connection state. The relay node is scoped to one account and can be run on user-controlled or provider-managed compute. This is preferred over a shared multi-tenant relay.
+**Preferred relay deployment pattern:** `docs/ARCHITECTURE.md` defines node-per-user/workspace relay as the preferred hosted pattern. This issue reflects that decision in the mobile data model; do not redefine the relay architecture here.
 
 This issue establishes the boundary in the type system. No relay transport is implemented here.
 
@@ -324,8 +329,8 @@ This issue establishes the boundary in the type system. No relay transport is im
 - [ ] `data/seed.ts` - `Agent` gains `mode: 'direct' | 'relay'` and `relayUrl?: string`; seed agents set `mode: 'direct'`
 - [ ] `store/index.ts` `addAgent` - sets `mode: 'direct'`
 - [ ] `services/transport/index.ts` `resolveTransport` - checks `agent.mode`; `'relay'` logs a console warning and falls back to `wsTransport`
-- [ ] `docs/ARCHITECTURE.md` section 2B updated to document the node-per-user relay deployment pattern and why it is preferred
-- [ ] `docs/ARCHITECTURE.md` section 3 updated to note `mode` field and that relay transport is not yet implemented
+- [ ] `docs/ARCHITECTURE.md` section 2B still documents node-per-user/workspace relay as the preferred deployment pattern
+- [ ] `docs/ARCHITECTURE.md` section 3 updated to note the implemented `mode` field and that relay transport is not yet implemented
 
 #### Test plan
 
