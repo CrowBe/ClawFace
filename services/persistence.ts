@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SEED_AGENTS, SEED_THREADS, type Agent, type Thread } from '@/data/seed';
 
 const STORAGE_KEY = 'clawface_state';
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 
 interface PersistedState {
   version: number;
@@ -13,18 +13,47 @@ interface PersistedState {
   };
 }
 
+type PersistedAppState = PersistedState['state'];
+
+type PersistedAgent = Agent | (Omit<Agent, 'mode'> & { mode?: Agent['mode']; relayUrl?: string });
+
 export async function hydrateState(): Promise<{ agents: Agent[]; threads: Thread[]; currentAgentId: string } | null> {
   try {
     const raw = await AsyncStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
 
     const parsed = JSON.parse(raw) as PersistedState;
-    if (parsed.version !== SCHEMA_VERSION) return null;
+    if (parsed.version > SCHEMA_VERSION) return null;
 
-    return parsed.state;
+    return migrateState(parsed.state, parsed.version);
   } catch {
     return null;
   }
+}
+
+function migrateState(state: PersistedAppState, fromVersion: number): PersistedAppState {
+  let next = state;
+
+  if (fromVersion < 1) throw new Error(`Unsupported schema version: ${fromVersion}`);
+
+  if (fromVersion < 2) {
+    next = migrateV1ToV2(next);
+  }
+
+  return next;
+}
+
+function migrateV1ToV2(state: PersistedAppState): PersistedAppState {
+  return {
+    ...state,
+    agents: state.agents.map(agent => {
+      const persisted = agent as PersistedAgent;
+      return {
+        ...persisted,
+        mode: persisted.mode ?? 'direct',
+      } satisfies Agent;
+    }),
+  };
 }
 
 export async function dehydrateState(state: {

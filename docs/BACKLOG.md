@@ -351,7 +351,7 @@ No behaviour change at runtime - verify by pairing via dev server and confirming
 
 ### CF-009 - Persistence schema migration
 
-**Status:** TODO
+**Status:** DONE
 **Priority:** P2
 **Epic:** D - Architecture Boundaries
 **Blocked by:** CF-008
@@ -364,11 +364,11 @@ Fix: apply forward migrations sequentially rather than discarding state.
 
 #### Acceptance criteria
 
-- [ ] `services/persistence.ts` - `hydrateState` applies migrations from stored version to current `SCHEMA_VERSION`
-- [ ] Migration V1->V2: adds `mode: 'direct'` to any `Agent` missing the field
-- [ ] `SCHEMA_VERSION` bumped to `2`
-- [ ] `dehydrateState` writes new version
-- [ ] Migration throws -> fall back to `null`
+- [x] `services/persistence.ts` - `hydrateState` applies migrations from stored version to current `SCHEMA_VERSION`
+- [x] Migration V1->V2: adds `mode: 'direct'` to any `Agent` missing the field
+- [x] `SCHEMA_VERSION` bumped to `2`
+- [x] `dehydrateState` writes new version
+- [x] Migration throws -> fall back to `null`
 
 #### Test plan
 
@@ -601,7 +601,7 @@ Integration:
 | CF-006 | Approval expiry (expiresAt) | P1 | DONE | CF-004 |
 | CF-007 | Push notification tap routing | P1 | DONE | - |
 | CF-008 | Explicit transport mode: direct vs relay | P2 | DONE | - |
-| CF-009 | Persistence schema migration | P2 | TODO | CF-008 |
+| CF-009 | Persistence schema migration | P2 | DONE | CF-008 |
 | CF-010 | Agent-side component architecture spec | P0 | DONE | CF-001 |
 | CF-011 | Headless browser tool interface | P1 | DONE | CF-010 |
 | CF-012 | Model provider interface | P1 | DONE | CF-010 |
