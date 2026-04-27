@@ -88,10 +88,12 @@ Compatibility note:
 Candidate implementations:
 
 - pi.dev provider abstraction
-- Anthropic SDK adapter
-- OpenAI-compatible adapter, including Ollama via base URL
+- Anthropic SDK adapter in `agent/providers/anthropic.ts`
+- OpenAI-compatible adapter in `agent/providers/openai.ts`, including Ollama via base URL
 - Google/Gemini adapter
 - local mock provider for tests
+
+Provider selection is config-driven via `agent/providers/config.ts`. The harness should call `createModelProvider(...)` from environment or harness config and then depend only on the `ModelProvider` interface. Switching between Anthropic, OpenAI-compatible services, Ollama, or a future pi-backed provider must not require harness code changes.
 
 ### 3.3 `ToolProvider`
 
@@ -171,6 +173,6 @@ These files are intentionally separate from the Expo app source. They define an 
 ## 5. Future implementation notes
 
 - CF-011 implements `BrowserTool` using Lightpanda and a mock, while preserving Playwright as a drop-in alternative.
-- CF-012 should add real provider adapters without changing `HarnessAdapter`.
+- CF-012 adds real provider adapters without changing `HarnessAdapter`.
 - CF-013 should add the concrete MCP server/registry and route all tool calls through it.
 - Approval request IDs, expiry, and revocation must continue to follow `docs/PROTOCOL.md` and `docs/ARCHITECTURE.md`.
