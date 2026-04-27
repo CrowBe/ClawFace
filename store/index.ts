@@ -192,7 +192,8 @@ export const useStore = create<State>((set, get) => ({
     const agent = get().agents.find(a => a.id === agentId);
     if (agent) {
       const transport = resolveTransport(agent);
-      transport.disconnect(agentId);
+      transport.revoke(agentId).catch(() => transport.disconnect(agentId));
+      deleteSessionKey(agentId).catch(() => {});
     }
     set(s => ({
       agents: s.agents.filter(a => a.id !== agentId),
@@ -218,9 +219,7 @@ export const useStore = create<State>((set, get) => ({
 
   signOut: async () => {
     const agents = get().agents;
-    agents.forEach(a => {
-      try { wsTransport.disconnect(a.id); } catch {}
-    });
+    await Promise.all(agents.map(a => wsTransport.revoke(a.id).catch(() => {})));
     await Promise.all(
       agents.map(a => deleteSessionKey(a.id).catch(() => {}))
     );

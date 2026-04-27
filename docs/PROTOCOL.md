@@ -114,12 +114,12 @@ interface ErrorMessage {
 
 ## 2. Agent endpoint: `/agent`
 
-Purpose: persistent bidirectional channel for connection readiness, user messages, streamed agent replies, approval requests/decisions, thread creation, push-token registration, and heartbeat.
+Purpose: persistent bidirectional channel for connection readiness, user messages, streamed agent replies, approval requests/decisions, thread creation, push-token registration, session revocation, and heartbeat.
 
 ### Ordering guarantees
 
 - The server may send `ready` immediately after the socket opens.
-- The client must send `hello` before any authenticated agent-control messages (`user_message`, `approval_decision`, `create_thread`, or `register_push`).
+- The client must send `hello` before any authenticated agent-control messages (`user_message`, `approval_decision`, `create_thread`, `register_push`, or `revoke_session`).
 - `hello.clientVersion` is the protocol version. Current version is `0.4.0`.
 - `message_delta` chunks for one response are sent in order on a single WebSocket connection.
 - If a logical response is streamed with `message_delta`, a later final `message` for that same logical response must reuse the same id (`message.id === message_delta.msgId`) so clients can treat it as a finalize/upsert instead of a second message.
@@ -211,6 +211,16 @@ interface RegisterPushRequest {
 Fields:
 
 - `token` — Expo/native push token registered for this paired agent session.
+
+#### `revoke_session`
+
+```ts
+interface RevokeSessionRequest {
+  type: 'revoke_session';
+}
+```
+
+Invalidates the session key authenticated by the earlier `hello` message. Servers must reject subsequent `hello` messages using the revoked key and should close the current socket after processing the revocation.
 
 #### `ping`
 

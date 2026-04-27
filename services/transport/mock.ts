@@ -17,6 +17,10 @@ export class MockTransport implements AgentTransport {
     this.emit({ type: 'connection_changed', agentId: agent.id, online: true });
   }
 
+  async revoke(agentId: string): Promise<void> {
+    this.emit({ type: 'connection_changed', agentId, online: false });
+  }
+
   disconnect(agentId: string): void {
     this.emit({ type: 'connection_changed', agentId, online: false });
   }
