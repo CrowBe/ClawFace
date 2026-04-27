@@ -80,9 +80,9 @@ Fields:
 - `code` — one-time code from the pairing payload.
 - `clientKey` — 32-byte client-generated random value, hex-encoded by the current app.
 
-Intent:
+Session derivation:
 
-- `clientKey` exists to bind the issued session to the initiating client. The current dev server ignores it and issues a random `sessionKey`; CF-003 will define and implement concrete derivation.
+- The current dev server derives `sessionKey = HMAC-SHA256('dev-secret', clientKey)`. Production implementations should use an environment-specific secret and equivalent server-side key derivation so the issued session is bound to the initiating client.
 
 ### Server -> client messages
 
