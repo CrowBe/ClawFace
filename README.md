@@ -10,6 +10,11 @@ ClawFace is an Expo mobile client for monitoring and controlling paired OpenClaw
 - Receive agent notifications through Expo Notifications.
 - Run against a bundled WebSocket dev server for local testing.
 
+## Documentation
+
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) is the canonical architecture and trust-boundary plan.
+- [`docs/SCALING_AND_UNIT_ECONOMICS.md`](docs/SCALING_AND_UNIT_ECONOMICS.md) covers business model, cost drivers, quotas, and scaling considerations.
+
 ## Development
 
 ```bash
