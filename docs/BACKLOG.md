@@ -274,7 +274,7 @@ Manual:
 
 ### CF-007 - Push notification tap routing
 
-**Status:** TODO
+**Status:** DONE
 **Priority:** P1
 **Epic:** C - Approval Workflow
 
@@ -284,9 +284,9 @@ Manual:
 
 #### Acceptance criteria
 
-- [ ] `app/_layout.tsx` - register `Notifications.addNotificationResponseReceivedListener`; on tap read `data.agentId`/`data.threadId`, navigate to `/chat/[agentId]/[threadId]`; clean up on unmount
-- [ ] `store/index.ts` - call `scheduleLocalApprovalNotification({ agentId, threadId, agentName, summary })` in the `approval_request` branch of `subscribeToTransport`; look up `agentName` from `store.getState().agents`
-- [ ] Import `scheduleLocalApprovalNotification` in `store/index.ts`
+- [x] `app/_layout.tsx` - register `Notifications.addNotificationResponseReceivedListener`; on tap read `data.agentId`/`data.threadId`, navigate to `/chat/[agentId]/[threadId]`; clean up on unmount
+- [x] `store/index.ts` - call `scheduleLocalApprovalNotification({ agentId, threadId, agentName, summary })` in the `approval_request` branch of `subscribeToTransport`; look up `agentName` from `store.getState().agents`
+- [x] Import `scheduleLocalApprovalNotification` in `store/index.ts`
 
 #### Test plan
 
@@ -599,7 +599,7 @@ Integration:
 | CF-004 | Add reqId for approval replay protection | P0 | DONE | CF-001 |
 | CF-005 | Session revocation on unpair and sign-out | P1 | DONE | CF-001 |
 | CF-006 | Approval expiry (expiresAt) | P1 | DONE | CF-004 |
-| CF-007 | Push notification tap routing | P1 | TODO | - |
+| CF-007 | Push notification tap routing | P1 | DONE | - |
 | CF-008 | Explicit transport mode: direct vs relay | P2 | TODO | - |
 | CF-009 | Persistence schema migration | P2 | TODO | CF-008 |
 | CF-010 | Agent-side component architecture spec | P0 | DONE | CF-001 |
