@@ -413,7 +413,7 @@ Design principle: each component boundary is an interface. Swapping the harness 
 
 ### CF-010 - Agent-side component architecture spec
 
-**Status:** TODO
+**Status:** DONE
 **Priority:** P0
 **Epic:** E - Agent-Side Component Architecture
 **Blocked by:** CF-001
