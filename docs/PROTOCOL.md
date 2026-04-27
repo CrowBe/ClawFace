@@ -120,6 +120,8 @@ Purpose: persistent bidirectional channel for connection readiness, user message
 - The client must send `hello` before any authenticated agent-control messages (`user_message`, `approval_decision`, `create_thread`, or `register_push`).
 - `hello.clientVersion` is the protocol version. Current version is `0.4.0`.
 - `message_delta` chunks for one response are sent in order on a single WebSocket connection.
+- If a logical response is streamed with `message_delta`, a later final `message` for that same logical response must reuse the same id (`message.id === message_delta.msgId`) so clients can treat it as a finalize/upsert instead of a second message.
+- A server must not emit deltas for one logical response and then emit a separate final `message` with a different id for that same response.
 - The current protocol does not define cross-message total ordering, replay protection, or exactly-once delivery.
 - Heartbeat is client-driven: client sends `ping`, server responds with `pong`.
 
@@ -250,6 +252,7 @@ Fields:
 
 - `threadId` — target thread.
 - `message` — complete message object matching `data/seed.ts` `Message`.
+- If this finalizes a response previously streamed with `message_delta`, `message.id` must equal the streamed `msgId`; clients should reconcile it as an upsert/finalization of the streamed message.
 
 #### `message_delta`
 
@@ -265,8 +268,10 @@ interface AgentMessageDeltaEvent {
 Fields:
 
 - `threadId` — target thread.
-- `msgId` — message id to upsert/append text into. Current client constructs an agent message from the delta.
+- `msgId` — stable message id to upsert/append text into for the duration of a streamed logical response.
 - `textDelta` — next text chunk.
+
+A streamed response may either be represented entirely by deltas, or be finalized by a `message` with the same id. A final `message` with a different id represents a different message and must not be used to finalize the streamed response.
 
 #### `approval_request`
 
