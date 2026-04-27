@@ -49,7 +49,7 @@ function handlePairSocket(ws) {
       if (pendingPairCodes.has(msg.code)) {
         const sessionKey = crypto.randomBytes(32).toString('hex');
         pendingPairCodes.delete(msg.code);
-        ws.send(JSON.stringify({ type: 'session', sessionKey }));
+        ws.send(JSON.stringify({ type: 'session', sessionKey, fingerprint: 'dev-fp' }));
         console.log(`[pair] Paired. Session key issued.`);
       } else {
         ws.send(JSON.stringify({ type: 'error', error: 'Invalid or expired code' }));

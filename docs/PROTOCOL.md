@@ -60,7 +60,7 @@ interface PairingPayload {
 
 Notes:
 
-- `fingerprint` is parsed by the app but is not verified yet. CF-002 will bind this to the `/pair` `session` response so the client can reject a rogue server.
+- `fingerprint` identifies the intended pairing server. The server must echo it in the `/pair` `session` response; the client must reject the session if it does not match the pairing payload.
 - `secure` selects `wss` when true and `ws` otherwise.
 
 ### Client -> server messages
@@ -92,12 +92,14 @@ Intent:
 interface PairSessionResponse {
   type: 'session';
   sessionKey: string;
+  fingerprint: string;
 }
 ```
 
 Fields:
 
 - `sessionKey` — bearer credential used in the `/agent` `hello` message.
+- `fingerprint` — server fingerprint echoed from the pairing payload. Clients must compare this with the payload fingerprint and abort pairing on mismatch.
 
 #### `error`
 

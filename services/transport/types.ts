@@ -29,7 +29,7 @@ export type ClientMessage =
 export type PairClientMessage = { type: 'pair'; code: string; clientKey: string };
 
 export type PairServerMessage =
-  | { type: 'session'; sessionKey: string }
+  | { type: 'session'; sessionKey: string; fingerprint: string }
   | { type: 'error'; error: string };
 
 export type TransportListener<T extends TransportEvent = TransportEvent> = (event: T) => void;

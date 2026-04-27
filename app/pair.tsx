@@ -97,6 +97,12 @@ export default function PairScreen() {
           try {
             const msg = JSON.parse(event.data as string) as Record<string, unknown>;
             if (msg.type === 'session' && typeof msg.sessionKey === 'string') {
+              if (msg.fingerprint !== payload.fingerprint) {
+                reject(new Error('Fingerprint mismatch - possible rogue server'));
+                ws.close();
+                return;
+              }
+
               const name = payload.name ?? agentName;
               const agent = addAgent(name || 'Agent', payload.host, msg.sessionKey, payload.port, payload.secure);
               await setSessionKey(agent.id, msg.sessionKey);
