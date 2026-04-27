@@ -1,4 +1,13 @@
-export type { AgentTransport, TransportEvent, TransportListener, TransportEventType } from './types';
+export type {
+  AgentTransport,
+  ClientMessage,
+  PairClientMessage,
+  PairServerMessage,
+  ServerMessage,
+  TransportEvent,
+  TransportEventType,
+  TransportListener,
+} from './types';
 export { MockTransport } from './mock';
 export { WebSocketTransport } from './websocket';
 
