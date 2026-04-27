@@ -78,6 +78,7 @@ export default function PairScreen() {
 
     try {
       const randomBytes = await Crypto.getRandomBytesAsync(32);
+      // Sent during pairing so the server can bind the issued session key to this client.
       const clientKey = Array.from(randomBytes).map(b => b.toString(16).padStart(2, '0')).join('');
 
       const ws = new WebSocket(agentWsUrl(payload, '/pair'));

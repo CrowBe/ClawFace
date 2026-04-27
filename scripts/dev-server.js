@@ -47,7 +47,7 @@ function handlePairSocket(ws) {
 
     if (msg.type === 'pair') {
       if (pendingPairCodes.has(msg.code)) {
-        const sessionKey = crypto.randomBytes(32).toString('hex');
+        const sessionKey = crypto.createHmac('sha256', 'dev-secret').update(msg.clientKey).digest('hex');
         pendingPairCodes.delete(msg.code);
         ws.send(JSON.stringify({ type: 'session', sessionKey, fingerprint: 'dev-fp' }));
         console.log(`[pair] Paired. Session key issued.`);
