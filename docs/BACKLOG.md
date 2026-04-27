@@ -141,7 +141,7 @@ Manual: pair via paste -> session issued, transport connects, mock message excha
 
 ### CF-004 - Add reqId for approval replay protection
 
-**Status:** TODO
+**Status:** DONE
 **Priority:** P0
 **Epic:** B - Trust & Safety
 **Blocked by:** CF-001
@@ -154,12 +154,12 @@ Fix: server generates `reqId` (UUID v4) per approval request. Client includes `r
 
 #### Acceptance criteria
 
-- [ ] `data/seed.ts` - add `reqId?: string` to `Message`; seed approval messages get a placeholder `reqId`
-- [ ] `services/transport/types.ts` - `AgentTransport.resolveApproval` gains `reqId: string` parameter
-- [ ] `services/transport/websocket.ts` - `resolveApproval` includes `reqId` in payload; `_handleMessage` stores `reqId` from `approval_request`
-- [ ] `store/index.ts` - `resolveApproval` reads `reqId` from message and passes to transport
-- [ ] `scripts/dev-server.js` - generates `reqId: crypto.randomUUID()`; tracks seen Set; logs and ignores duplicates
-- [ ] `docs/PROTOCOL.md` updated with `reqId` in both `approval_request` and `approval_decision` schemas
+- [x] `data/seed.ts` - add `reqId?: string` to `Message`; seed approval messages get a placeholder `reqId`
+- [x] `services/transport/types.ts` - `AgentTransport.resolveApproval` gains `reqId: string` parameter
+- [x] `services/transport/websocket.ts` - `resolveApproval` includes `reqId` in payload; `_handleMessage` stores `reqId` from `approval_request`
+- [x] `store/index.ts` - `resolveApproval` reads `reqId` from message and passes to transport
+- [x] `scripts/dev-server.js` - generates `reqId: crypto.randomUUID()`; tracks seen Set; logs and ignores duplicates
+- [x] `docs/PROTOCOL.md` updated with `reqId` in both `approval_request` and `approval_decision` schemas
 
 #### Test plan
 
@@ -596,7 +596,7 @@ Integration:
 | CF-001 | Document the wire protocol | P0 | TODO | - |
 | CF-002 | Verify server fingerprint during pairing | P1 | TODO | CF-001 |
 | CF-003 | Decide and implement clientKey usage | P1 | TODO | CF-001 |
-| CF-004 | Add reqId for approval replay protection | P0 | TODO | CF-001 |
+| CF-004 | Add reqId for approval replay protection | P0 | DONE | CF-001 |
 | CF-005 | Session revocation on unpair and sign-out | P1 | TODO | CF-001 |
 | CF-006 | Approval expiry (expiresAt) | P1 | TODO | CF-004 |
 | CF-007 | Push notification tap routing | P1 | TODO | - |
