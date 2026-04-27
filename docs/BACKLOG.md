@@ -547,7 +547,7 @@ Integration:
 
 ### CF-013 - MCP server integration interface
 
-**Status:** TODO
+**Status:** DONE
 **Priority:** P1
 **Epic:** E - Agent-Side Component Architecture
 **Blocked by:** CF-010
@@ -560,15 +560,15 @@ The `McpServer` interface wraps an MCP-compatible server. Tool implementations f
 
 #### Acceptance criteria
 
-- [ ] `agent/interfaces/mcp.ts` defines `McpServer` with:
+- [x] `agent/interfaces/mcp.ts` defines `McpServer` with:
   - `listTools(): Promise<ToolSpec[]>`
   - `callTool(name: string, args: Record<string, unknown>): Promise<ToolResult>`
   - `registerTool(spec: ToolSpec, handler: ToolHandler): void`
-- [ ] `agent/mcp/server.ts` - lightweight MCP server implementation (can wrap an existing MCP SDK if suitable one exists for Node.js)
-- [ ] Browser tool from CF-011 registers itself via `registerTool` at startup
-- [ ] Harness uses `McpServer.listTools()` to build the tool list passed to `ModelProvider.complete()`
-- [ ] Adding a new tool requires only: implement `ToolHandler`, call `registerTool` - no other harness changes
-- [ ] `docs/AGENT_ARCHITECTURE.md` updated: MCP section notes the tool registration pattern
+- [x] `agent/mcp/server.ts` - lightweight MCP server implementation (can wrap an existing MCP SDK if suitable one exists for Node.js)
+- [x] Browser tool from CF-011 registers itself via `registerTool` at startup
+- [x] Harness uses `McpServer.listTools()` to build the tool list passed to `ModelProvider.complete()`
+- [x] Adding a new tool requires only: implement `ToolHandler`, call `registerTool` - no other harness changes
+- [x] `docs/AGENT_ARCHITECTURE.md` updated: MCP section notes the tool registration pattern
 
 #### Test plan
 
@@ -605,4 +605,4 @@ Integration:
 | CF-010 | Agent-side component architecture spec | P0 | DONE | CF-001 |
 | CF-011 | Headless browser tool interface | P1 | DONE | CF-010 |
 | CF-012 | Model provider interface | P1 | DONE | CF-010 |
-| CF-013 | MCP server integration interface | P1 | TODO | CF-010 |
+| CF-013 | MCP server integration interface | P1 | DONE | CF-010 |
