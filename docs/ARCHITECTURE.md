@@ -11,14 +11,14 @@ Related documents:
 - `CLAUDE.md` — coding-agent handoff notes and repo conventions
 - `docs/BACKLOG.md` — executable work backlog; not a source of architectural truth
 - `docs/SCALING_AND_UNIT_ECONOMICS.md` — business model, cost drivers, quotas, and scaling considerations
-- `docs/PROTOCOL.md` — future canonical wire-protocol spec once CF-001 is complete
-- `docs/AGENT_ARCHITECTURE.md` — future canonical agent-side component spec once CF-010 is complete
+- `docs/PROTOCOL.md` — canonical wire-protocol spec
+- `docs/AGENT_ARCHITECTURE.md` — canonical agent-side component spec
 
 Source-of-truth rule:
 
 - product architecture, trust boundaries, relay responsibilities, approval safety requirements, and hosted/local responsibilities live here
-- concrete WebSocket message schemas and ordering guarantees will live in `docs/PROTOCOL.md` after CF-001
-- agent-side harness/component internals will live in `docs/AGENT_ARCHITECTURE.md` after CF-010
+- concrete WebSocket message schemas and ordering guarantees live in `docs/PROTOCOL.md`
+- agent-side harness/component internals live in `docs/AGENT_ARCHITECTURE.md`
 - business model, pricing assumptions, quotas, cost traps, and scaling economics live in `docs/SCALING_AND_UNIT_ECONOMICS.md`
 - `docs/BACKLOG.md` should describe work to do and link to the canonical docs; it should not become a competing architecture spec
 - `README.md` and `CLAUDE.md` may summarize and link, but should not redefine these decisions
