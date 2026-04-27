@@ -151,8 +151,17 @@ Responsibilities:
 Candidate implementations:
 
 - official/modelcontextprotocol TypeScript SDK wrapper
-- lightweight in-process MCP-compatible registry for local development
+- lightweight in-process MCP-compatible registry for local development; `agent/mcp/server.ts` provides `InProcessMcpServer` and can register any `ToolProvider` at startup
 - external MCP server bridge
+
+Tool registration pattern:
+
+- each tool implementation exposes `ToolProvider.listTools()` and `ToolProvider.executeTool(...)`
+- the harness or its config constructs the desired tool providers, such as `MockBrowserTool` or `LightpandaBrowserTool`
+- startup calls `createMcpServer([browserTool, ...otherTools])` or `server.registerProvider(...)`
+- `HarnessAdapter` calls `McpServer.listTools()` to build the tool list passed to `ModelProvider.complete()` and calls `McpServer.callTool(...)` for model-requested tool calls
+
+Adding a new tool should require only implementing `ToolProvider` and registering it at startup. Harness execution flow should not branch on individual tool names.
 
 ---
 
@@ -174,5 +183,5 @@ These files are intentionally separate from the Expo app source. They define an 
 
 - CF-011 implements `BrowserTool` using Lightpanda and a mock, while preserving Playwright as a drop-in alternative.
 - CF-012 adds real provider adapters without changing `HarnessAdapter`.
-- CF-013 should add the concrete MCP server/registry and route all tool calls through it.
+- CF-013 adds the concrete MCP server/registry and routes tool calls through it.
 - Approval request IDs, expiry, and revocation must continue to follow `docs/PROTOCOL.md` and `docs/ARCHITECTURE.md`.
