@@ -120,6 +120,14 @@ export const useStore = create<State>((set, get) => ({
   toggleDrawer: (v) => set(s => ({ showDrawer: v ?? !s.showDrawer })),
 
   resolveApproval: (threadId, msgId, decision) => {
+    const thread = get().threads.find(t => t.id === threadId);
+    const approval = thread?.messages.find(m => m.id === msgId && m.role === 'approval');
+    if (!thread || !approval?.reqId) {
+      set({ toast: 'Approval request is stale' });
+      setTimeout(() => set({ toast: null }), 2000);
+      return;
+    }
+
     set(s => ({
       threads: s.threads.map(t => {
         if (t.id !== threadId) return t;
@@ -132,12 +140,10 @@ export const useStore = create<State>((set, get) => ({
     }));
     setTimeout(() => set({ toast: null }), 2000);
 
-    const thread = get().threads.find(t => t.id === threadId);
-    if (!thread) return;
     const agent = get().agents.find(a => a.id === thread.agentId);
     if (!agent) return;
     const transport = resolveTransport(agent);
-    transport.resolveApproval(agent.id, threadId, msgId, decision).catch(() => {});
+    transport.resolveApproval(agent.id, threadId, msgId, approval.reqId, decision).catch(() => {});
   },
 
   sendMessage: (threadId, text) => {

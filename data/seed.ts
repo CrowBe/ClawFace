@@ -35,6 +35,7 @@ export interface Message {
   tool?: string;
   summary?: string;
   risk?: string;
+  reqId?: string;
   files?: string[];
   diff?: DiffLine[];
   t?: string;
@@ -106,7 +107,7 @@ function DEMO_THREADS(): Thread[] { return [
       { id: 3, role: 'tool', name: 'grep', arg: '"KEY|TOKEN"', status: 'done', result: '8 hits across 5 files', t: '-13m' },
       { id: 4, role: 'agent', text: "3 files touch it. I'll consolidate into auth/keys.ts, rotate the secret, and update 2 call sites.", t: '-12m' },
       {
-        id: 5, role: 'approval', tool: 'write_files', summary: 'Write 3 files', risk: 'write',
+        id: 5, role: 'approval', tool: 'write_files', summary: 'Write 3 files', risk: 'write', reqId: 'seed-grep-1-approval-5',
         files: ['src/auth/keys.ts (new)', 'src/api/login.ts', 'src/api/refresh.ts'],
         diff: [
           { type: 'minus', text: 'const KEY = "legacy-static-key"' },
@@ -149,7 +150,7 @@ function DEMO_THREADS(): Thread[] { return [
       { id: 3, role: 'tool', name: 'build', arg: 'npm run build', status: 'done', result: 'bundle 2.1MB', t: '-5m' },
       { id: 4, role: 'agent', text: 'Build green. Ready to ship to staging?', t: '-4m' },
       {
-        id: 5, role: 'approval', tool: 'shell', summary: 'Run deploy.sh staging', risk: 'shell',
+        id: 5, role: 'approval', tool: 'shell', summary: 'Run deploy.sh staging', risk: 'shell', reqId: 'seed-shell-1-approval-5',
         files: ['./scripts/deploy.sh staging'],
         diff: [
           { type: 'plain', text: '$ ssh deploy@staging.internal' },

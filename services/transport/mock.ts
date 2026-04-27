@@ -33,7 +33,7 @@ export class MockTransport implements AgentTransport {
     }, 900);
   }
 
-  async resolveApproval(_agentId: string, threadId: string, msgId: number, decision: 'approved' | 'denied'): Promise<void> {
+  async resolveApproval(_agentId: string, threadId: string, _msgId: number, _reqId: string, decision: 'approved' | 'denied'): Promise<void> {
     const msg: Message = {
       id: Date.now(),
       role: 'agent',

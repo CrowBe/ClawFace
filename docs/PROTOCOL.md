@@ -166,6 +166,7 @@ interface ApprovalDecisionRequest {
   type: 'approval_decision';
   threadId: string;
   msgId: number;
+  reqId: string;
   decision: 'approved' | 'denied';
 }
 ```
@@ -174,9 +175,10 @@ Fields:
 
 - `threadId` — thread containing the approval request.
 - `msgId` — approval message id being resolved.
+- `reqId` — server-generated approval request id from the matching `approval_request`; used for replay/deduplication.
 - `decision` — user decision.
 
-Note: approval replay protection is not implemented yet. CF-004 will add a server-generated `reqId` to `approval_request` and require it in `approval_decision`.
+Servers must process at most one decision for a given `reqId`. Duplicate decisions with the same `reqId` must be ignored.
 
 #### `create_thread`
 
@@ -286,9 +288,9 @@ interface ApprovalRequestEvent {
 Fields:
 
 - `threadId` — thread containing the request.
-- `message` — approval message matching `data/seed.ts` `Message` with `role: 'approval'` and approval-specific fields (`tool`, `summary`, `risk`, `files`, `diff`, `status`).
+- `message` — approval message matching `data/seed.ts` `Message` with `role: 'approval'`, required `reqId`, and approval-specific fields (`tool`, `summary`, `risk`, `files`, `diff`, `status`).
 
-Note: CF-004 will add a server-generated request identifier for replay protection.
+The server must generate a fresh, unique `message.reqId` for each approval request. Clients must echo that value in `approval_decision.reqId`.
 
 #### `thread`
 
