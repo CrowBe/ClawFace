@@ -8,7 +8,14 @@ This is the canonical architecture document for ClawFace. If another document de
 Related documents:
 
 - `README.md` — project overview and development setup
+- `CLAUDE.md` — coding-agent handoff notes and repo conventions
 - `docs/SCALING_AND_UNIT_ECONOMICS.md` — business model, cost drivers, quotas, and scaling considerations
+
+Source-of-truth rule:
+
+- architecture, trust boundaries, pairing/session semantics, approval semantics, and hosted/local responsibilities live here
+- business model, pricing assumptions, quotas, cost traps, and scaling economics live in `docs/SCALING_AND_UNIT_ECONOMICS.md`
+- `README.md` and `CLAUDE.md` may summarize and link, but should not redefine these decisions
 
 ---
 
