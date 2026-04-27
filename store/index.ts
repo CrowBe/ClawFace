@@ -206,7 +206,7 @@ export const useStore = create<State>((set, get) => ({
     const id = 'agent-' + Date.now();
     const newAgent: Agent = {
       id, name, mono: name.slice(0, 2).toUpperCase(), tint: '#E4DBEC',
-      role: 'newly paired', host, online: true, paired: 'just now', folders: false,
+      role: 'newly paired', host, mode: 'direct', online: true, paired: 'just now', folders: false,
       perms: { read: true, write: 'ask', shell: 'ask', network: true },
       notifs: { approvals: 'push+sound', completions: 'silent', mentions: 'push' },
       sessionKey,

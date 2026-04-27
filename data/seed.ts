@@ -7,6 +7,8 @@ export interface Agent {
   tint: string;
   role: string;
   host: string;
+  mode: 'direct' | 'relay';
+  relayUrl?: string;
   online: boolean;
   paired: string;
   folders: boolean;
@@ -68,31 +70,31 @@ export const SEED_THREADS: Thread[] = __DEV__ ? DEMO_THREADS() : [];
 function DEMO_AGENTS(): Agent[] { return [
   {
     id: 'grep', name: 'Grep Norton', mono: 'GN', tint: '#EADFC5',
-    role: 'code · detective', host: 'mbp-noah.local', online: true, paired: '12d', folders: false,
+    role: 'code · detective', host: 'mbp-noah.local', mode: 'direct', online: true, paired: '12d', folders: false,
     perms: { read: true, write: 'ask', shell: 'ask', network: true },
     notifs: { approvals: 'push+sound', completions: 'silent', mentions: 'push' },
   },
   {
     id: 'shell', name: 'Sir Shellsworth', mono: 'SS', tint: '#E9D1CA',
-    role: 'ops · butler', host: 'prod-deploy-01', online: true, paired: '3w', folders: true,
+    role: 'ops · butler', host: 'prod-deploy-01', mode: 'direct', online: true, paired: '3w', folders: true,
     perms: { read: true, write: 'ask', shell: 'ask', network: true },
     notifs: { approvals: 'push+sound', completions: 'push', mentions: 'push' },
   },
   {
     id: 'monet', name: 'Claude Monet', mono: 'CM', tint: '#D6E0CE',
-    role: 'writing · artsy', host: 'cloud-us-west', online: true, paired: '1mo', folders: false,
+    role: 'writing · artsy', host: 'cloud-us-west', mode: 'direct', online: true, paired: '1mo', folders: false,
     perms: { read: true, write: true, shell: false, network: true },
     notifs: { approvals: 'push', completions: 'silent', mentions: 'push' },
   },
   {
     id: 'query', name: 'Sheryl Query', mono: 'SQ', tint: '#CCD8E3',
-    role: 'data · sleuth', host: 'warehouse.io', online: false, paired: '2mo', folders: false,
+    role: 'data · sleuth', host: 'warehouse.io', mode: 'direct', online: false, paired: '2mo', folders: false,
     perms: { read: true, write: false, shell: false, network: true },
     notifs: { approvals: 'push', completions: 'silent', mentions: 'push' },
   },
   {
     id: 'paws', name: 'Paw Patrol', mono: 'PP', tint: '#E4D4E6',
-    role: 'notes · archivist', host: 'meeting.local', online: false, paired: '10d', folders: false,
+    role: 'notes · archivist', host: 'meeting.local', mode: 'direct', online: false, paired: '10d', folders: false,
     perms: { read: true, write: 'ask', shell: false, network: false },
     notifs: { approvals: 'push', completions: 'silent', mentions: 'silent' },
   },
