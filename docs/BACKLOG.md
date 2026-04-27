@@ -8,7 +8,7 @@ Related docs:
 - `docs/ARCHITECTURE.md` - canonical product architecture, trust boundary, relay, approval-safety, and hosted/local responsibility decisions
 - `docs/SCALING_AND_UNIT_ECONOMICS.md` - canonical business model, quota, cost, abuse-control, and scaling considerations
 - `docs/PROTOCOL.md` - canonical wire protocol
-- `docs/AGENT_ARCHITECTURE.md` - future canonical agent-side component architecture once CF-010 is complete
+- `docs/AGENT_ARCHITECTURE.md` - canonical agent-side component architecture
 - `services/transport/types.ts` - TypeScript transport interface
 - `scripts/dev-server.js` - local dev server (reference agent implementation)
 
@@ -62,7 +62,7 @@ Human review: every `ws.send(...)` in `scripts/dev-server.js` and every `case` i
 
 ### CF-002 - Verify server fingerprint during pairing
 
-**Status:** TODO
+**Status:** DONE
 **Priority:** P1
 **Epic:** A - Protocol & Wire Contract
 **Blocked by:** CF-001
@@ -426,18 +426,18 @@ Before building any agent-side components, define the interfaces that make them 
 
 #### Acceptance criteria
 
-- [ ] `docs/AGENT_ARCHITECTURE.md` created with:
-  - [ ] Component diagram (text/ASCII) matching the map above
-  - [ ] Interface contract for each boundary:
+- [x] `docs/AGENT_ARCHITECTURE.md` created with:
+  - [x] Component diagram (text/ASCII) matching the map above
+  - [x] Interface contract for each boundary:
     - `HarnessAdapter` - implements ClawFace wire protocol, delegates internally
     - `ModelProvider` - send prompt, receive streaming response, handle tool calls
     - `ToolProvider` - list tools, execute tool, return result
     - `BrowserTool` - navigate, extract, interact (extends `ToolProvider`)
     - `McpServer` - standard MCP protocol surface
-  - [ ] Notes on which existing open source projects can implement each interface (pi for harness, Lightpanda/Playwright for browser, standard MCP SDKs for tool layer)
-  - [ ] Compatibility note: pi.dev already handles model provider switching (15+ providers) - the `ModelProvider` interface should be compatible with pi's provider abstraction
-- [ ] TypeScript interface stubs for each boundary in `agent/interfaces/` (new directory, separate from the mobile app source)
-- [ ] `AGENTS.md` updated with a note that agent-side work lives in `agent/` and follows `docs/AGENT_ARCHITECTURE.md`
+  - [x] Notes on which existing open source projects can implement each interface (pi for harness, Lightpanda/Playwright for browser, standard MCP SDKs for tool layer)
+  - [x] Compatibility note: pi.dev already handles model provider switching (15+ providers) - the `ModelProvider` interface should be compatible with pi's provider abstraction
+- [x] TypeScript interface stubs for each boundary in `agent/interfaces/` (new directory, separate from the mobile app source)
+- [x] `AGENTS.md` updated with a note that agent-side work lives in `agent/` and follows `docs/AGENT_ARCHITECTURE.md`
 
 #### Test plan
 
@@ -593,7 +593,7 @@ Integration:
 
 | Key | Title | Priority | Status | Blocked by |
 |---|---|---|---|---|
-| CF-001 | Document the wire protocol | P0 | TODO | - |
+| CF-001 | Document the wire protocol | P0 | DONE | - |
 | CF-002 | Verify server fingerprint during pairing | P1 | TODO | CF-001 |
 | CF-003 | Decide and implement clientKey usage | P1 | TODO | CF-001 |
 | CF-004 | Add reqId for approval replay protection | P0 | DONE | CF-001 |
@@ -602,7 +602,7 @@ Integration:
 | CF-007 | Push notification tap routing | P1 | TODO | - |
 | CF-008 | Explicit transport mode: direct vs relay | P2 | TODO | - |
 | CF-009 | Persistence schema migration | P2 | TODO | CF-008 |
-| CF-010 | Agent-side component architecture spec | P0 | TODO | CF-001 |
+| CF-010 | Agent-side component architecture spec | P0 | DONE | CF-001 |
 | CF-011 | Headless browser tool interface | P1 | TODO | CF-010 |
 | CF-012 | Model provider interface | P1 | TODO | CF-010 |
 | CF-013 | MCP server integration interface | P1 | TODO | CF-010 |
