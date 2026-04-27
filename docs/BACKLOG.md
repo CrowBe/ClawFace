@@ -589,6 +589,134 @@ Integration:
 
 ---
 
+## Epic E - OpenClaw Local MVP
+
+> These issues turn ClawFace from a mock-server mobile shell into a locally testable OpenClaw control surface. Keep the first bridge deliberately narrow: one local OpenClaw instance, one explicit repo/session binding, direct WebSocket mode, no hosted relay assumptions.
+
+---
+
+### CF-014 - OpenClaw local bridge MVP
+
+**Status:** TODO
+**Priority:** P0
+**Epic:** E - OpenClaw Local MVP
+**Blocked by:** CF-001, CF-010
+
+#### Description
+
+Implement the smallest real bridge that lets ClawFace pair with this local OpenClaw instance and exchange messages with a repo-bound OpenClaw session. This replaces the current mock-only local test path for the core conversation loop.
+
+The MVP must make context explicit. Telegram-style global conversation state is not acceptable: every ClawFace thread must show and route through a concrete OpenClaw target such as repo path, branch, and session/thread id.
+
+#### Acceptance criteria
+
+- [ ] Add an OpenClaw bridge entrypoint, separate from `scripts/dev-server.js`, that implements the ClawFace `/pair` and `/agent` WebSocket protocol in direct/local mode
+- [ ] Bridge prints a ClawFace-compatible pairing payload and/or QR source containing host, port, code, fingerprint, and protocol version
+- [ ] Pairing from the Expo app succeeds against the bridge without using the mock dev server
+- [ ] A paired agent stores enough metadata to display the active context: repo name/path, current branch if available, and OpenClaw session/thread id
+- [ ] Sending a message from ClawFace routes to the bound OpenClaw session
+- [ ] OpenClaw assistant responses stream or append back into the correct ClawFace thread
+- [ ] Async command completion events are routed to the correct ClawFace thread instead of a global Telegram/direct-chat context
+- [ ] The bridge rejects messages for unknown, revoked, or mismatched sessions
+- [ ] README documents the local bridge test flow separately from the mock dev server flow
+
+#### Test plan
+
+```bash
+npx tsc --noEmit
+```
+
+Manual MVP test:
+1. Start the OpenClaw local bridge from the repo.
+2. Start the Expo app with local cleartext enabled if testing on Android/LAN.
+3. Pair ClawFace using the bridge payload.
+4. Confirm the paired agent/thread displays the repo/session context clearly.
+5. Send a simple message from ClawFace and confirm the response returns to the same thread.
+6. Trigger a safe async command/event and confirm it appears in the same ClawFace thread, not Telegram.
+7. Unpair and confirm the bridge rejects the old session.
+
+#### Files
+
+- `scripts/openclaw-bridge.*` or equivalent bridge entrypoint
+- `agent/` bridge/harness implementation files as needed
+- `services/transport/types.ts` if protocol typing needs extension
+- `docs/PROTOCOL.md` if wire messages change
+- `README.md`
+
+---
+
+### CF-015 - OpenClaw approval bridge
+
+**Status:** TODO
+**Priority:** P0
+**Epic:** E - OpenClaw Local MVP
+**Blocked by:** CF-014, CF-004
+
+#### Description
+
+Map OpenClaw tool/action approval requests into ClawFace approval cards and send approve/deny decisions back to OpenClaw safely. This is required before ClawFace can be trusted as a serious mobile control surface rather than a read-only chat viewer.
+
+#### Acceptance criteria
+
+- [ ] Bridge converts OpenClaw approval requests into ClawFace `approval_request` messages with stable `reqId`, human-readable title/body, risk level if available, and expiry
+- [ ] ClawFace approve/deny actions call back into the correct OpenClaw pending approval
+- [ ] Duplicate approval decisions are ignored by `reqId`
+- [ ] Expired approval requests cannot be approved from ClawFace
+- [ ] Approval results are reflected in the originating ClawFace thread
+- [ ] README local MVP instructions include a safe approval test
+
+#### Test plan
+
+```bash
+npx tsc --noEmit
+```
+
+Manual:
+1. Start the OpenClaw bridge and pair ClawFace.
+2. Trigger a harmless approval-requiring action from the bound session.
+3. Approve from ClawFace and confirm OpenClaw receives exactly one approval.
+4. Attempt a duplicate approval and confirm it is ignored.
+5. Trigger another approval, let it expire, and confirm ClawFace cannot approve it.
+
+#### Files
+
+- OpenClaw bridge approval integration files
+- `services/transport/types.ts` if approval metadata needs extension
+- `docs/PROTOCOL.md` if wire messages change
+- `README.md`
+
+---
+
+### CF-016 - Local MVP test instructions and readiness check
+
+**Status:** TODO
+**Priority:** P1
+**Epic:** E - OpenClaw Local MVP
+**Blocked by:** CF-014, CF-015
+
+#### Description
+
+After the local bridge and approval bridge are implemented, evaluate the MVP end-to-end and produce clear instructions for Ben to test locally. This issue is intentionally documentation-and-validation focused: do not declare the MVP testable until the documented path has been run.
+
+#### Acceptance criteria
+
+- [ ] Run the full local MVP manual test path against a real OpenClaw bridge, not only the mock dev server
+- [ ] Document exact commands for starting the bridge and Expo app
+- [ ] Document what Ben should see at each step: pairing, context display, message response, async event routing, approval, unpair/revoke
+- [ ] Document known limitations and sharp edges honestly
+- [ ] Ping Ben with concise test instructions once the MVP path is validated
+
+#### Test plan
+
+Manual only: execute the documented instructions from a clean start and verify they work as written.
+
+#### Files
+
+- `README.md`
+- optional `docs/LOCAL_MVP_TESTING.md` only if README would become too long; otherwise keep the instructions in README to avoid another source of truth
+
+---
+
 ## Issue index
 
 | Key | Title | Priority | Status | Blocked by |
@@ -606,3 +734,6 @@ Integration:
 | CF-011 | Headless browser tool interface | P1 | DONE | CF-010 |
 | CF-012 | Model provider interface | P1 | DONE | CF-010 |
 | CF-013 | MCP server integration interface | P1 | DONE | CF-010 |
+| CF-014 | OpenClaw local bridge MVP | P0 | TODO | CF-001, CF-010 |
+| CF-015 | OpenClaw approval bridge | P0 | TODO | CF-014, CF-004 |
+| CF-016 | Local MVP test instructions and readiness check | P1 | TODO | CF-014, CF-015 |
