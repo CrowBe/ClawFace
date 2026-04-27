@@ -17,6 +17,7 @@ export default function AlertsScreen() {
   const threads = useStore(s => s.threads);
   const resolveApproval = useStore(s => s.resolveApproval);
   const markThreadRead = useStore(s => s.markThreadRead);
+  const now = Date.now();
 
   // Build approval items and info items from threads
   const pendingApprovals: Array<{
@@ -25,6 +26,7 @@ export default function AlertsScreen() {
     agentId: string;
     title: string;
     when: string;
+    expired: boolean;
   }> = [];
 
   const infoItems: Array<{
@@ -43,6 +45,7 @@ export default function AlertsScreen() {
           agentId: t.agentId,
           title: m.summary ?? 'Approval needed',
           when: m.t ?? '',
+          expired: m.expiresAt != null && now >= m.expiresAt,
         });
       }
     });
@@ -88,27 +91,34 @@ export default function AlertsScreen() {
           const agent = agents.find(a => a.id === item.agentId);
           if (!agent) return null;
           return (
-            <View key={`${item.threadId}-${item.msgId}`} style={styles.approvalCard}>
+            <View
+              key={`${item.threadId}-${item.msgId}`}
+              style={[styles.approvalCard, item.expired && styles.expiredApprovalCard]}
+            >
               <View style={styles.approvalHeader}>
                 <Avatar agent={agent} size={32} />
                 <View style={{ flex: 1 }}>
                   <Text style={styles.approvalAgentName}>{agent.name} · {item.threadId}</Text>
-                  <Text style={styles.approvalWhen}>needs approval · {item.when}</Text>
+                  <Text style={[styles.approvalWhen, item.expired && styles.expiredText]}>
+                    {item.expired ? 'Expired' : 'needs approval'} · {item.when}
+                  </Text>
                 </View>
               </View>
-              <Text style={styles.approvalTitle}>{item.title}</Text>
+              <Text style={[styles.approvalTitle, item.expired && styles.expiredText]}>{item.title}</Text>
               <View style={styles.approvalActions}>
                 <TouchableOpacity
                   activeOpacity={0.8}
+                  disabled={item.expired}
                   onPress={() => resolveApproval(item.threadId, item.msgId, 'approved')}
-                  style={styles.approveBtn}
+                  style={[styles.approveBtn, item.expired && styles.disabledBtn]}
                 >
                   <Text style={styles.approveBtnText}>Approve</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   activeOpacity={0.7}
+                  disabled={item.expired}
                   onPress={() => resolveApproval(item.threadId, item.msgId, 'denied')}
-                  style={styles.denyBtn}
+                  style={[styles.denyBtn, item.expired && styles.disabledBtn]}
                 >
                   <Text style={styles.denyBtnText}>Deny</Text>
                 </TouchableOpacity>
@@ -193,6 +203,10 @@ const styles = StyleSheet.create({
     borderColor: C.accent,
     gap: 10,
   },
+  expiredApprovalCard: {
+    backgroundColor: C.surface2,
+    borderColor: C.border,
+  },
   approvalHeader: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   approvalAgentName: { fontSize: 14, fontWeight: '600', color: C.ink },
   approvalWhen: {
@@ -200,6 +214,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Courier New',
   },
   approvalTitle: { fontSize: 15, color: C.ink },
+  expiredText: { color: C.muted },
   approvalActions: { flexDirection: 'row', gap: 6 },
   approveBtn: {
     flex: 1, padding: 9, borderRadius: 11,
@@ -212,6 +227,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   denyBtnText: { color: C.ink2, fontSize: 14, fontWeight: '500' },
+  disabledBtn: { opacity: 0.45 },
   openBtn: {
     paddingHorizontal: 14, paddingVertical: 9, borderRadius: 11,
     borderWidth: 1, borderColor: C.border,

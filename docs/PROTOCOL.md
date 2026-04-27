@@ -300,9 +300,10 @@ interface ApprovalRequestEvent {
 Fields:
 
 - `threadId` — thread containing the request.
-- `message` — approval message matching `data/seed.ts` `Message` with `role: 'approval'`, required `reqId`, and approval-specific fields (`tool`, `summary`, `risk`, `files`, `diff`, `status`).
+- `message` — approval message matching `data/seed.ts` `Message` with `role: 'approval'`, required `reqId`, optional `expiresAt`, and approval-specific fields (`tool`, `summary`, `risk`, `files`, `diff`, `status`).
 
 The server must generate a fresh, unique `message.reqId` for each approval request. Clients must echo that value in `approval_decision.reqId`.
+When present, `message.expiresAt` is a Unix timestamp in milliseconds. Clients should exclude expired pending approvals from badges/counts and should not submit decisions for expired requests.
 
 #### `thread`
 

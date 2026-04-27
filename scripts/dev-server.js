@@ -128,6 +128,7 @@ function handleAgentSocket(ws) {
               setTimeout(() => {
                 const approvalId = Date.now() + 20;
                 const reqId = crypto.randomUUID();
+                const expiresAt = Date.now() + 300_000;
                 ws.send(JSON.stringify({
                   type: 'approval_request',
                   threadId,
@@ -135,6 +136,7 @@ function handleAgentSocket(ws) {
                     id: approvalId,
                     role: 'approval',
                     reqId,
+                    expiresAt,
                     tool: 'write_files',
                     summary: 'Write 1 file',
                     risk: 'write',

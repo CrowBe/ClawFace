@@ -232,7 +232,7 @@ Manual:
 
 ### CF-006 - Approval expiry (expiresAt)
 
-**Status:** TODO
+**Status:** DONE
 **Priority:** P1
 **Epic:** C - Approval Workflow
 **Blocked by:** CF-004
@@ -245,11 +245,11 @@ Fix: add `expiresAt: number` (Unix ms) to approval messages. Filter from badge c
 
 #### Acceptance criteria
 
-- [ ] `data/seed.ts` - add `expiresAt?: number` to `Message`; seed approvals get `expiresAt: Date.now() + 5 * 60 * 1000`
-- [ ] `store/index.ts` - `agentsWithPending()` and `pendingCount()` filter: `status === 'pending' && (expiresAt == null || Date.now() < expiresAt)`
-- [ ] `scripts/dev-server.js` - `approval_request` messages include `expiresAt: Date.now() + 300_000`
-- [ ] `app/alerts.tsx` - expired approvals render with "Expired" label and muted style; excluded from badge
-- [ ] `docs/PROTOCOL.md` updated: `expiresAt` is optional on `approval_request`
+- [x] `data/seed.ts` - add `expiresAt?: number` to `Message`; seed approvals get `expiresAt: Date.now() + 5 * 60 * 1000`
+- [x] `store/index.ts` - `agentsWithPending()` and `pendingCount()` filter: `status === 'pending' && (expiresAt == null || Date.now() < expiresAt)`
+- [x] `scripts/dev-server.js` - `approval_request` messages include `expiresAt: Date.now() + 300_000`
+- [x] `app/alerts.tsx` - expired approvals render with "Expired" label and muted style; excluded from badge
+- [x] `docs/PROTOCOL.md` updated: `expiresAt` is optional on `approval_request`
 
 #### Test plan
 
@@ -598,7 +598,7 @@ Integration:
 | CF-003 | Decide and implement clientKey usage | P1 | DONE | CF-001 |
 | CF-004 | Add reqId for approval replay protection | P0 | DONE | CF-001 |
 | CF-005 | Session revocation on unpair and sign-out | P1 | DONE | CF-001 |
-| CF-006 | Approval expiry (expiresAt) | P1 | TODO | CF-004 |
+| CF-006 | Approval expiry (expiresAt) | P1 | DONE | CF-004 |
 | CF-007 | Push notification tap routing | P1 | TODO | - |
 | CF-008 | Explicit transport mode: direct vs relay | P2 | TODO | - |
 | CF-009 | Persistence schema migration | P2 | TODO | CF-008 |

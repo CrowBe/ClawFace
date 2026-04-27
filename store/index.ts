@@ -41,6 +41,19 @@ interface State {
   updateThreadPreview: (threadId: string, preview: string, updatedMin: number) => void;
   setAgentConnection: (agentId: string, online: boolean) => void;
   addThread: (thread: Thread) => void;
+  sweepExpiredApprovals: () => void;
+}
+
+function isPendingApproval(message: Message, now = Date.now()) {
+  return message.role === 'approval'
+    && message.status === 'pending'
+    && (message.expiresAt == null || now < message.expiresAt);
+}
+
+function scheduleExpirySweep(message: Message, store: { getState: () => State }) {
+  if (message.role !== 'approval' || message.expiresAt == null) return;
+  const delay = Math.max(message.expiresAt - Date.now(), 0) + 100;
+  setTimeout(() => store.getState().sweepExpiredApprovals(), delay);
 }
 
 function subscribeToTransport(store: { getState: () => State }) {
@@ -55,6 +68,7 @@ function subscribeToTransport(store: { getState: () => State }) {
         break;
       case 'approval_request':
         s.appendMessage(event.threadId, event.message);
+        scheduleExpirySweep(event.message, store);
         break;
       case 'thread_updated':
         s.addThread(event.thread);
@@ -76,6 +90,7 @@ function subscribeToTransport(store: { getState: () => State }) {
         break;
       case 'approval_request':
         s.appendMessage(event.threadId, event.message);
+        scheduleExpirySweep(event.message, store);
         break;
       case 'thread_updated':
         s.addThread(event.thread);
@@ -102,7 +117,7 @@ export const useStore = create<State>((set, get) => ({
     const out = new Set<string>();
     s.threads.forEach(t => {
       t.messages.forEach(m => {
-        if (m.role === 'approval' && m.status === 'pending') out.add(t.agentId);
+        if (isPendingApproval(m)) out.add(t.agentId);
       });
     });
     return out;
@@ -111,7 +126,7 @@ export const useStore = create<State>((set, get) => ({
   pendingCount: () => {
     const s = get();
     let n = 0;
-    s.threads.forEach(t => t.messages.forEach(m => { if (m.role === 'approval' && m.status === 'pending') n++; }));
+    s.threads.forEach(t => t.messages.forEach(m => { if (isPendingApproval(m)) n++; }));
     return n;
   },
 
@@ -122,7 +137,7 @@ export const useStore = create<State>((set, get) => ({
   resolveApproval: (threadId, msgId, decision) => {
     const thread = get().threads.find(t => t.id === threadId);
     const approval = thread?.messages.find(m => m.id === msgId && m.role === 'approval');
-    if (!thread || !approval?.reqId) {
+    if (!thread || !approval?.reqId || !isPendingApproval(approval)) {
       set({ toast: 'Approval request is stale' });
       setTimeout(() => set({ toast: null }), 2000);
       return;
@@ -292,6 +307,8 @@ export const useStore = create<State>((set, get) => ({
     if (exists) return { threads: s.threads.map(t => t.id === thread.id ? thread : t) };
     return { threads: [...s.threads, thread] };
   }),
+
+  sweepExpiredApprovals: () => set(s => ({ threads: [...s.threads] })),
 }));
 
 subscribeToTransport(useStore);
