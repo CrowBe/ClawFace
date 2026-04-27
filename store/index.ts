@@ -3,6 +3,7 @@ import { SEED_AGENTS, SEED_THREADS, type Agent, type Thread, type Message } from
 import { mockTransport, wsTransport, resolveTransport } from '@/services/transport';
 import { debouncedDehydrate, clearPersistedState } from '@/services/persistence';
 import { deleteSessionKey, getSessionKey } from '@/services/secureStore';
+import { scheduleLocalApprovalNotification } from '@/services/notifications';
 
 interface AppSettings {
   biometric: boolean;
@@ -56,6 +57,26 @@ function scheduleExpirySweep(message: Message, store: { getState: () => State })
   setTimeout(() => store.getState().sweepExpiredApprovals(), delay);
 }
 
+function notifyApprovalRequest(threadId: string, message: Message, store: { getState: () => State }) {
+  if (!isPendingApproval(message)) return;
+
+  const s = store.getState();
+  if (!s.settings.pushNotifs) return;
+
+  const thread = s.threads.find(t => t.id === threadId);
+  if (!thread) return;
+
+  const agent = s.agents.find(a => a.id === thread.agentId);
+  if (!agent) return;
+
+  scheduleLocalApprovalNotification({
+    agentId: agent.id,
+    threadId,
+    agentName: agent.name,
+    summary: message.summary ?? 'Approval needed',
+  }).catch(() => {});
+}
+
 function subscribeToTransport(store: { getState: () => State }) {
   const unsubMock = mockTransport.subscribe(event => {
     const s = store.getState();
@@ -69,6 +90,7 @@ function subscribeToTransport(store: { getState: () => State }) {
       case 'approval_request':
         s.appendMessage(event.threadId, event.message);
         scheduleExpirySweep(event.message, store);
+        notifyApprovalRequest(event.threadId, event.message, store);
         break;
       case 'thread_updated':
         s.addThread(event.thread);
@@ -91,6 +113,7 @@ function subscribeToTransport(store: { getState: () => State }) {
       case 'approval_request':
         s.appendMessage(event.threadId, event.message);
         scheduleExpirySweep(event.message, store);
+        notifyApprovalRequest(event.threadId, event.message, store);
         break;
       case 'thread_updated':
         s.addThread(event.thread);
