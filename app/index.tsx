@@ -171,12 +171,14 @@ export default function AgentsScreen() {
       <View style={styles.titleBlock}>
         <Text style={styles.pageTitle}>Agents</Text>
         <Text style={styles.subtitle}>
-          {agents.filter(a => a.online).length} online · {asks} waiting on you
+          {agents.length === 0
+            ? 'Pair an agent to get started'
+            : `${agents.filter(a => a.online).length} online · ${asks} waiting on you`}
         </Text>
       </View>
 
       {/* Segmented toggle: Agents | Inbox */}
-      {showToggle && (
+      {agents.length > 0 && showToggle && (
         <View style={styles.segmentWrap}>
           <View style={styles.segment}>
             <TouchableOpacity
@@ -207,7 +209,9 @@ export default function AgentsScreen() {
       )}
 
       <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        {agentsView === 'agents' ? (
+        {agents.length === 0 ? (
+          <EmptyState onPair={() => router.push('/pair')} />
+        ) : agentsView === 'agents' ? (
           <AgentList agents={agents} threads={threads} pendingSet={pendingSet} />
         ) : (
           <InboxList items={inboxItems} agents={agents} />
@@ -219,6 +223,23 @@ export default function AgentsScreen() {
 
       {showDrawer && <Drawer />}
       <Toast />
+    </View>
+  );
+}
+
+function EmptyState({ onPair }: { onPair: () => void }) {
+  return (
+    <View style={styles.emptyCard}>
+      <View style={styles.emptyIcon}>
+        <PlusIcon color={C.muted} size={28} />
+      </View>
+      <Text style={styles.emptyTitle}>No agents paired yet</Text>
+      <Text style={styles.emptyBody}>
+        Run OpenClaw (or another supported agent) on your computer, then scan its QR code to start a session.
+      </Text>
+      <TouchableOpacity activeOpacity={0.85} onPress={onPair} style={styles.emptyBtn}>
+        <Text style={styles.emptyBtnText}>Pair an agent</Text>
+      </TouchableOpacity>
     </View>
   );
 }
@@ -517,4 +538,41 @@ const styles = StyleSheet.create({
     marginTop: 2,
     fontFamily: 'Courier New',
   },
+  emptyCard: {
+    marginTop: 48,
+    alignItems: 'center',
+    paddingHorizontal: 24,
+    gap: 10,
+  },
+  emptyIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderColor: C.borderStrong,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 6,
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: C.ink,
+    letterSpacing: -0.3,
+  },
+  emptyBody: {
+    fontSize: 13,
+    color: C.muted,
+    textAlign: 'center',
+    lineHeight: 18,
+    marginBottom: 8,
+  },
+  emptyBtn: {
+    paddingHorizontal: 18,
+    paddingVertical: 11,
+    borderRadius: 12,
+    backgroundColor: C.ink,
+  },
+  emptyBtnText: { color: '#fff', fontSize: 14, fontWeight: '600' },
 });

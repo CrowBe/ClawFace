@@ -1,57 +1,205 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
-  View, Text, TouchableOpacity, StyleSheet, TextInput,
-  Animated, Easing,
+  View, Text, TouchableOpacity, StyleSheet, TextInput, Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { CameraView, useCameraPermissions } from 'expo-camera';
+import * as Crypto from 'expo-crypto';
 import { useStore } from '@/store';
+import { setSessionKey } from '@/services/secureStore';
+import { registerForPushNotifications } from '@/services/notifications';
+import { wsTransport } from '@/services/transport';
 import { CloseIcon, CheckIcon } from '@/components/Icons';
 import { C } from '@/constants/colors';
-import Svg, { Rect, Line, Defs, LinearGradient, Stop } from 'react-native-svg';
 
-type Stage = 'scan' | 'found' | 'done';
+interface PairingPayload {
+  v: 1;
+  host: string;
+  port: number;
+  fingerprint: string;
+  code: string;
+  name?: string;
+  secure?: boolean;
+}
+
+function agentWsUrl(payload: PairingPayload, path: '/pair' | '/agent'): string {
+  const protocol = payload.secure ? 'wss' : 'ws';
+  return `${protocol}://${payload.host}:${payload.port}${path}`;
+}
+
+function parsePairingPayload(raw: string): PairingPayload | null {
+  let str = raw.trim();
+  if (str.startsWith('clawface://')) {
+    str = Buffer.from(str.replace('clawface://', ''), 'base64').toString('utf8');
+  }
+  try {
+    const obj = JSON.parse(str) as Record<string, unknown>;
+    if (
+      obj.v === 1 &&
+      typeof obj.host === 'string' &&
+      typeof obj.port === 'number' &&
+      typeof obj.fingerprint === 'string' &&
+      typeof obj.code === 'string'
+    ) {
+      return obj as unknown as PairingPayload;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+type Stage = 'scan' | 'pairing' | 'done' | 'error';
 
 export default function PairScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const addAgent = useStore(s => s.addAgent);
 
+  const [permission, requestPermission] = useCameraPermissions();
   const [stage, setStage] = useState<Stage>('scan');
   const [agentName, setAgentName] = useState('');
-  const scanAnim = useRef(new Animated.Value(0)).current;
+  const [pairedAgentId, setPairedAgentId] = useState('');
+  const [errorMsg, setErrorMsg] = useState('');
+  const [pasteInput, setPasteInput] = useState('');
+  const [codeInput, setCodeInput] = useState('');
+  const [scanned, setScanned] = useState(false);
 
-  useEffect(() => {
-    if (stage === 'scan') {
-      const anim = Animated.loop(
-        Animated.sequence([
-          Animated.timing(scanAnim, { toValue: 1, duration: 1200, useNativeDriver: true, easing: Easing.inOut(Easing.ease) }),
-          Animated.timing(scanAnim, { toValue: 0, duration: 1200, useNativeDriver: true, easing: Easing.inOut(Easing.ease) }),
-        ])
-      );
-      anim.start();
-      const timer = setTimeout(() => {
-        anim.stop();
-        setStage('found');
-      }, 3000);
-      return () => { anim.stop(); clearTimeout(timer); };
+  const handlePayload = useCallback(async (raw: string) => {
+    const payload = parsePairingPayload(raw);
+    if (!payload) {
+      setErrorMsg('Invalid QR payload. Expected JSON with v, host, port, fingerprint, code.');
+      setStage('error');
+      return;
     }
-  }, [stage]);
 
-  const scanY = scanAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [-70, 70],
-  });
+    setStage('pairing');
+
+    try {
+      const randomBytes = await Crypto.getRandomBytesAsync(32);
+      const clientKey = Array.from(randomBytes).map(b => b.toString(16).padStart(2, '0')).join('');
+
+      const ws = new WebSocket(agentWsUrl(payload, '/pair'));
+
+      await new Promise<void>((resolve, reject) => {
+        const timer = setTimeout(() => {
+          ws.close();
+          reject(new Error('Pairing handshake timed out'));
+        }, 10000);
+
+        ws.onopen = () => {
+          ws.send(JSON.stringify({ type: 'pair', code: payload.code, clientKey }));
+        };
+
+        ws.onmessage = async (event) => {
+          clearTimeout(timer);
+          try {
+            const msg = JSON.parse(event.data as string) as Record<string, unknown>;
+            if (msg.type === 'session' && typeof msg.sessionKey === 'string') {
+              const name = payload.name ?? agentName;
+              const agent = addAgent(name || 'Agent', payload.host, msg.sessionKey, payload.port, payload.secure);
+              await setSessionKey(agent.id, msg.sessionKey);
+              wsTransport.setSessionKey(agent.id, msg.sessionKey);
+              setPairedAgentId(agent.id);
+              setAgentName(name || '');
+
+              const pushToken = await registerForPushNotifications().catch(() => null);
+              if (pushToken) {
+                const agentWs = new WebSocket(agentWsUrl(payload, '/agent'));
+                agentWs.onopen = () => {
+                  agentWs.send(JSON.stringify({ type: 'hello', sessionKey: msg.sessionKey, clientVersion: '0.4.0' }));
+                  agentWs.send(JSON.stringify({ type: 'register_push', token: pushToken }));
+                  agentWs.close();
+                };
+              }
+
+              ws.close();
+              resolve();
+            } else if (msg.type === 'error') {
+              reject(new Error((msg.error as string) ?? 'Pairing rejected by server'));
+            } else {
+              reject(new Error('Unexpected server message during pairing'));
+            }
+          } catch (e) {
+            reject(e);
+          }
+        };
+
+        ws.onerror = () => reject(new Error('WebSocket connection failed'));
+        ws.onclose = () => {};
+      });
+
+      setStage('done');
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Unknown pairing error';
+      setErrorMsg(msg);
+      setStage('error');
+      setScanned(false);
+    }
+  }, [addAgent, agentName]);
+
+  const handleBarcodeScan = useCallback(({ data }: { data: string }) => {
+    if (scanned) return;
+    setScanned(true);
+    handlePayload(data).catch(() => {});
+  }, [scanned, handlePayload]);
 
   const handleDone = () => {
-    const name = agentName.trim() || 'Betty Shellstein';
-    addAgent(name, 'studio.local');
     router.back();
   };
 
+  const handlePasteSubmit = () => {
+    if (!pasteInput.trim()) return;
+    handlePayload(pasteInput.trim()).catch(() => {});
+  };
+
+  const handleCodeSubmit = () => {
+    if (!codeInput.trim()) return;
+    Alert.alert('Enter full link', 'Please paste the full clawface:// link instead.');
+  };
+
+  if (!permission) {
+    return (
+      <View style={[styles.root, { paddingTop: insets.top, alignItems: 'center', justifyContent: 'center' }]}>
+        <Text style={styles.subtitle}>Requesting camera permission…</Text>
+      </View>
+    );
+  }
+
+  if (!permission.granted) {
+    return (
+      <View style={[styles.root, { paddingTop: insets.top }]}>
+        <View style={styles.header}>
+          <TouchableOpacity activeOpacity={0.7} onPress={() => router.back()} style={styles.navBtn}>
+            <CloseIcon color={C.ink2} />
+          </TouchableOpacity>
+        </View>
+        <View style={styles.permDenied}>
+          <Text style={styles.title}>Camera access needed</Text>
+          <Text style={styles.subtitle}>
+            ClawFace needs camera access to scan QR codes. Please grant permission to continue.
+          </Text>
+          <TouchableOpacity activeOpacity={0.8} onPress={requestPermission} style={styles.permBtn}>
+            <Text style={styles.confirmText}>Grant camera access</Text>
+          </TouchableOpacity>
+        </View>
+
+        <Text style={styles.orDivider}>— OR —</Text>
+        <AlternativeInputs
+          pasteInput={pasteInput}
+          setPasteInput={setPasteInput}
+          codeInput={codeInput}
+          setCodeInput={setCodeInput}
+          onPasteSubmit={handlePasteSubmit}
+          onCodeSubmit={handleCodeSubmit}
+        />
+      </View>
+    );
+  }
+
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
-      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity activeOpacity={0.7} onPress={() => router.back()} style={styles.navBtn}>
           <CloseIcon color={C.ink2} />
@@ -62,15 +210,26 @@ export default function PairScreen() {
         <Text style={styles.title}>Pair agent</Text>
         <Text style={styles.subtitle}>
           {stage === 'scan' && 'Point your camera at the QR code shown in OpenClaw on your machine.'}
-          {stage === 'found' && 'Found a machine. Confirm the fingerprint matches.'}
-          {stage === 'done' && 'Agent paired. Give them a name.'}
+          {stage === 'pairing' && 'Connecting to agent…'}
+          {stage === 'done' && 'Agent paired successfully.'}
+          {stage === 'error' && 'Pairing failed.'}
         </Text>
       </View>
 
       <View style={styles.content}>
-        {stage === 'scan' && (
-          <View style={styles.qrViewfinder}>
-            {/* Corner brackets */}
+        {(stage === 'scan' || stage === 'pairing') && (
+          <View style={styles.cameraWrap}>
+            <CameraView
+              style={styles.camera}
+              facing="back"
+              barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
+              onBarcodeScanned={stage === 'scan' ? handleBarcodeScan : undefined}
+            />
+            {stage === 'pairing' && (
+              <View style={styles.cameraOverlay}>
+                <Text style={styles.pairingText}>Pairing…</Text>
+              </View>
+            )}
             {[
               { top: 16, left: 16, rotate: '0deg' },
               { top: 16, right: 16, rotate: '90deg' },
@@ -79,42 +238,9 @@ export default function PairScreen() {
             ].map((pos, i) => (
               <View
                 key={i}
-                style={[styles.corner, pos, { transform: [{ rotate: pos.rotate }] }]}
+                style={[styles.corner, pos as object, { transform: [{ rotate: pos.rotate }] }]}
               />
             ))}
-
-            {/* Scan line */}
-            <Animated.View
-              style={[styles.scanLine, { transform: [{ translateY: scanY }] }]}
-            />
-
-            <Text style={styles.scanHint}>LOOKING FOR QR…</Text>
-          </View>
-        )}
-
-        {stage === 'found' && (
-          <View style={styles.foundCard}>
-            <Text style={styles.foundLabel}>Machine</Text>
-            <Text style={styles.foundHost}>studio.local</Text>
-            <View style={styles.fingerprintBox}>
-              <Text style={styles.fingerprintText}>fp: 4a:8f:e2:9c:b1:77:3d:28{'\n'}ed25519 · openclaw 0.4.2</Text>
-            </View>
-            <View style={styles.foundActions}>
-              <TouchableOpacity
-                activeOpacity={0.8}
-                onPress={() => setStage('done')}
-                style={styles.confirmBtn}
-              >
-                <Text style={styles.confirmText}>Confirm & pair</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                activeOpacity={0.7}
-                onPress={() => setStage('scan')}
-                style={styles.cancelBtn}
-              >
-                <Text style={styles.cancelText}>Cancel</Text>
-              </TouchableOpacity>
-            </View>
           </View>
         )}
 
@@ -129,7 +255,7 @@ export default function PairScreen() {
               style={styles.nameInput}
               value={agentName}
               onChangeText={setAgentName}
-              placeholder="Betty Shellstein"
+              placeholder="Agent name"
               placeholderTextColor={C.muted}
               textAlign="center"
               autoFocus
@@ -140,20 +266,84 @@ export default function PairScreen() {
           </View>
         )}
 
-        {/* OR divider + alternatives */}
+        {stage === 'error' && (
+          <View style={styles.errorCard}>
+            <Text style={styles.errorTitle}>Could not pair</Text>
+            <Text style={styles.errorMsg}>{errorMsg}</Text>
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onPress={() => { setStage('scan'); setScanned(false); setErrorMsg(''); }}
+              style={styles.confirmBtn}
+            >
+              <Text style={styles.confirmText}>Try again</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
         <Text style={styles.orDivider}>— OR —</Text>
 
-        <View style={styles.alternativesCard}>
-          <TouchableOpacity style={styles.altRow} activeOpacity={0.7}>
-            <Text style={styles.altLabel}>Paste link</Text>
-            <Text style={styles.altHint}>clawface://…</Text>
+        <AlternativeInputs
+          pasteInput={pasteInput}
+          setPasteInput={setPasteInput}
+          codeInput={codeInput}
+          setCodeInput={setCodeInput}
+          onPasteSubmit={handlePasteSubmit}
+          onCodeSubmit={handleCodeSubmit}
+        />
+      </View>
+    </View>
+  );
+}
+
+function AlternativeInputs({
+  pasteInput, setPasteInput, codeInput, setCodeInput, onPasteSubmit, onCodeSubmit,
+}: {
+  pasteInput: string;
+  setPasteInput: (v: string) => void;
+  codeInput: string;
+  setCodeInput: (v: string) => void;
+  onPasteSubmit: () => void;
+  onCodeSubmit: () => void;
+}) {
+  return (
+    <View style={styles.alternativesCard}>
+      <View style={styles.altRow}>
+        <TextInput
+          style={styles.altInput}
+          value={pasteInput}
+          onChangeText={setPasteInput}
+          placeholder="Paste clawface:// link or JSON"
+          placeholderTextColor={C.muted}
+          returnKeyType="go"
+          onSubmitEditing={onPasteSubmit}
+          autoCapitalize="none"
+          autoCorrect={false}
+        />
+        {pasteInput.length > 0 && (
+          <TouchableOpacity activeOpacity={0.7} onPress={onPasteSubmit} style={styles.altSubmit}>
+            <Text style={styles.altSubmitText}>Go</Text>
           </TouchableOpacity>
-          <View style={styles.altDivider} />
-          <TouchableOpacity style={styles.altRow} activeOpacity={0.7}>
-            <Text style={styles.altLabel}>Enter code</Text>
-            <Text style={styles.altHint}>_ _ _-_ _ _ _</Text>
+        )}
+      </View>
+      <View style={styles.altDivider} />
+      <View style={styles.altRow}>
+        <TextInput
+          style={styles.altInput}
+          value={codeInput}
+          onChangeText={setCodeInput}
+          placeholder="Enter code  _ _ _-_ _ _ _"
+          placeholderTextColor={C.muted}
+          returnKeyType="go"
+          onSubmitEditing={onCodeSubmit}
+          autoCapitalize="none"
+          autoCorrect={false}
+          keyboardType="default"
+        />
+        {codeInput.length > 0 && (
+          <TouchableOpacity activeOpacity={0.7} onPress={onCodeSubmit} style={styles.altSubmit}>
+            <Text style={styles.altSubmitText}>Go</Text>
           </TouchableOpacity>
-        </View>
+        )}
       </View>
     </View>
   );
@@ -186,16 +376,26 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     paddingHorizontal: 16,
-    gap: 0,
   },
-  qrViewfinder: {
+  cameraWrap: {
     aspectRatio: 1,
-    backgroundColor: '#1A1815',
     borderRadius: 24,
     overflow: 'hidden',
     position: 'relative',
+  },
+  camera: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  cameraOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.5)',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  pairingText: {
+    color: C.surface,
+    fontSize: 16,
+    fontWeight: '600',
   },
   corner: {
     position: 'absolute',
@@ -206,67 +406,16 @@ const styles = StyleSheet.create({
     borderColor: C.accent,
     borderRadius: 2,
   },
-  scanLine: {
-    position: 'absolute',
-    left: '14%',
-    right: '14%',
-    height: 2,
-    backgroundColor: C.accent,
-    shadowColor: C.accent,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 1,
-    shadowRadius: 8,
-    elevation: 4,
+  permDenied: {
+    flex: 1,
+    paddingHorizontal: 20,
+    gap: 12,
   },
-  scanHint: {
-    position: 'absolute',
-    bottom: 20,
-    fontFamily: 'Courier New',
-    fontSize: 11,
-    letterSpacing: 1,
-    color: 'rgba(255,255,255,0.7)',
-  },
-  foundCard: {
-    backgroundColor: C.surface,
-    borderRadius: 24,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: C.border,
-    gap: 0,
-  },
-  foundLabel: {
-    fontSize: 11, color: C.muted,
-    letterSpacing: 1.2, textTransform: 'uppercase',
-    fontFamily: 'Courier New',
-  },
-  foundHost: {
-    fontSize: 22, fontWeight: '700', color: C.ink,
-    letterSpacing: -0.5, marginTop: 4,
-  },
-  fingerprintBox: {
-    marginTop: 14,
-    padding: 12,
-    backgroundColor: C.surface2,
-    borderRadius: 12,
-  },
-  fingerprintText: {
-    fontFamily: 'Courier New',
-    fontSize: 12,
-    color: C.ink2,
-    lineHeight: 18,
-  },
-  foundActions: { flexDirection: 'row', gap: 8, marginTop: 16 },
-  confirmBtn: {
-    flex: 1, padding: 12, borderRadius: 12,
+  permBtn: {
+    padding: 12, borderRadius: 12,
     backgroundColor: C.ink, alignItems: 'center',
+    marginTop: 8,
   },
-  confirmText: { color: '#fff', fontSize: 15, fontWeight: '600' },
-  cancelBtn: {
-    paddingHorizontal: 18, paddingVertical: 12, borderRadius: 12,
-    backgroundColor: C.surface, borderWidth: 1, borderColor: C.border,
-    alignItems: 'center',
-  },
-  cancelText: { color: C.ink2, fontSize: 15 },
   doneCard: {
     backgroundColor: C.surface,
     borderRadius: 24, padding: 20,
@@ -300,7 +449,24 @@ const styles = StyleSheet.create({
     width: '100%', padding: 12, borderRadius: 12,
     backgroundColor: C.ink, alignItems: 'center',
   },
-  doneBtnText: { color: '#fff', fontSize: 15, fontWeight: '600' },
+  doneBtnText: { color: C.surface, fontSize: 15, fontWeight: '600' },
+  errorCard: {
+    backgroundColor: C.surface,
+    borderRadius: 24, padding: 20,
+    borderWidth: 1, borderColor: C.danger,
+    gap: 10,
+  },
+  errorTitle: {
+    fontSize: 18, fontWeight: '700', color: C.danger,
+  },
+  errorMsg: {
+    fontSize: 13, color: C.ink2, lineHeight: 18,
+  },
+  confirmBtn: {
+    padding: 12, borderRadius: 12,
+    backgroundColor: C.ink, alignItems: 'center',
+  },
+  confirmText: { color: C.surface, fontSize: 15, fontWeight: '600' },
   orDivider: {
     textAlign: 'center',
     paddingVertical: 18,
@@ -320,9 +486,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 14,
-    paddingVertical: 12,
+    paddingVertical: 4,
+  },
+  altInput: {
+    flex: 1,
+    fontSize: 14,
+    color: C.ink,
+    paddingVertical: 10,
   },
   altDivider: { height: 1, backgroundColor: C.border },
-  altLabel: { flex: 1, fontSize: 14, color: C.ink },
-  altHint: { fontSize: 12, color: C.muted, fontFamily: 'Courier New' },
+  altSubmit: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  altSubmitText: { fontSize: 13, fontWeight: '600', color: C.accent },
 });

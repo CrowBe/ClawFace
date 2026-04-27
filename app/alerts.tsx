@@ -65,7 +65,14 @@ export default function AlertsScreen() {
           <BackIcon color={C.ink2} />
         </TouchableOpacity>
         <View style={{ flex: 1 }} />
-        <TouchableOpacity activeOpacity={0.7}>
+        <TouchableOpacity
+          activeOpacity={0.7}
+          onPress={() => {
+            threads.forEach(t => {
+              if (t.unread > 0) markThreadRead(t.id);
+            });
+          }}
+        >
           <Text style={styles.markAll}>Mark all read</Text>
         </TouchableOpacity>
       </View>

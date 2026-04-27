@@ -1,6 +1,6 @@
 import React from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet,
+  View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -19,6 +19,7 @@ export default function ConfigScreen() {
   const agents = useStore(s => s.agents);
   const setAgentPerm = useStore(s => s.setAgentPerm);
   const setAgentFolders = useStore(s => s.setAgentFolders);
+  const removeAgent = useStore(s => s.removeAgent);
 
   const agent = agents.find(a => a.id === agentId);
   if (!agent) return null;
@@ -110,7 +111,33 @@ export default function ConfigScreen() {
         </Group>
 
         {/* Danger zone */}
-        <TouchableOpacity activeOpacity={0.7} style={styles.unpairBtn}>
+        <TouchableOpacity
+          activeOpacity={0.7}
+          style={styles.unpairBtn}
+          onPress={() => {
+            Alert.alert(
+              'Unpair agent',
+              `Remove ${agent.name}? This will disconnect the agent and delete all local data for it.`,
+              [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                  text: 'Unpair',
+                  style: 'destructive',
+                  onPress: async () => {
+                    try {
+                      const { deleteSessionKey } = await import('@/services/secureStore');
+                      await deleteSessionKey(agentId);
+                    } catch {
+                    } finally {
+                      removeAgent(agentId);
+                      router.replace('/');
+                    }
+                  },
+                },
+              ]
+            );
+          }}
+        >
           <Text style={styles.unpairText}>Unpair agent</Text>
         </TouchableOpacity>
       </ScrollView>
