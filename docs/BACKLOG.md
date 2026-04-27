@@ -7,7 +7,7 @@ This file is an executable backlog, not a source of architectural truth. When an
 Related docs:
 - `docs/ARCHITECTURE.md` - canonical product architecture, trust boundary, relay, approval-safety, and hosted/local responsibility decisions
 - `docs/SCALING_AND_UNIT_ECONOMICS.md` - canonical business model, quota, cost, abuse-control, and scaling considerations
-- `docs/PROTOCOL.md` - future canonical wire protocol once CF-001 is complete
+- `docs/PROTOCOL.md` - canonical wire protocol
 - `docs/AGENT_ARCHITECTURE.md` - future canonical agent-side component architecture once CF-010 is complete
 - `services/transport/types.ts` - TypeScript transport interface
 - `scripts/dev-server.js` - local dev server (reference agent implementation)
@@ -20,7 +20,7 @@ Related docs:
 
 ### CF-001 - Document the wire protocol
 
-**Status:** TODO
+**Status:** DONE
 **Priority:** P0
 **Epic:** A - Protocol & Wire Contract
 **Blocks:** CF-002, CF-003, CF-004, CF-005
@@ -35,15 +35,15 @@ The protocol has two endpoints:
 
 #### Acceptance criteria
 
-- [ ] `docs/PROTOCOL.md` created with:
-  - [ ] Pairing handshake sequence diagram (text/ASCII)
-  - [ ] All client->server message types with required fields and TypeScript types
-  - [ ] All server->client message types with required fields and TypeScript types
-  - [ ] Notes on ordering guarantees (e.g. `hello` must be first on `/agent`)
-  - [ ] Version field: current protocol version is `0.4.0` (matches `clientVersion` in `websocket.ts:84`)
-  - [ ] Notes on `fingerprint` intent (see CF-002) and `clientKey` intent (see CF-003)
-- [ ] `services/transport/types.ts` - add a typed union for all inbound server->client messages (currently only outbound event types are defined)
-- [ ] No new functionality introduced - doc and types only
+- [x] `docs/PROTOCOL.md` created with:
+  - [x] Pairing handshake sequence diagram (text/ASCII)
+  - [x] All client->server message types with required fields and TypeScript types
+  - [x] All server->client message types with required fields and TypeScript types
+  - [x] Notes on ordering guarantees (e.g. `hello` must be first on `/agent`)
+  - [x] Version field: current protocol version is `0.4.0` (matches `clientVersion` in `websocket.ts:84`)
+  - [x] Notes on `fingerprint` intent (see CF-002) and `clientKey` intent (see CF-003)
+- [x] `services/transport/types.ts` - add a typed union for all inbound server->client messages (currently only outbound event types are defined)
+- [x] No new functionality introduced - doc and types only
 
 #### Test plan
 
