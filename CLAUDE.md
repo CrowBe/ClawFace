@@ -5,8 +5,10 @@ Mobile agentic-workflow client — a single app for managing multiple AI coding 
 ## Documentation source of truth
 
 - [README.md](README.md) is the project overview and setup entry point.
-- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) is the canonical architecture, product-surface, trust-boundary, pairing/session, approval, and hosted-vs-local responsibility document.
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) is the canonical product architecture, trust-boundary, approval-safety, relay, and hosted-vs-local responsibility document.
 - [docs/SCALING_AND_UNIT_ECONOMICS.md](docs/SCALING_AND_UNIT_ECONOMICS.md) covers market positioning, business model, cost drivers, quotas, abuse controls, and scaling scenarios.
+- [docs/BACKLOG.md](docs/BACKLOG.md) is the executable architecture backlog. It should point to canonical docs, not redefine architecture.
+- Future detailed specs should use the planned canonical homes: `docs/PROTOCOL.md` for wire protocol after CF-001 and `docs/AGENT_ARCHITECTURE.md` for agent-side component internals after CF-010.
 - Do not create overlapping architecture/business planning docs. Update the canonical doc for the concern instead.
 
 ## Stack

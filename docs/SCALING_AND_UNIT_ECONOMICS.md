@@ -5,7 +5,7 @@ Created: 2026-04-27
 
 This document covers ClawFace's business model, cost drivers, quotas, abuse posture, and scaling considerations.
 
-Architecture belongs in `docs/ARCHITECTURE.md`. This file should not redefine product surfaces, trust boundaries, pairing semantics, approval semantics, or hosted/local responsibilities except where needed to explain cost or packaging implications.
+Architecture belongs in `docs/ARCHITECTURE.md`. This file should not redefine product surfaces, trust boundaries, pairing semantics, approval semantics, or hosted/local responsibilities except where needed to explain cost or packaging implications. The executable task backlog lives in `docs/BACKLOG.md` and should not duplicate the economic assumptions here.
 
 ---
 
@@ -81,6 +81,7 @@ Potential cost traps:
 1. **Always-on WebSocket relay**
    - many idle connections can become the main infrastructure cost
    - needs connection limits, idle timeout, reconnect backoff, and per-plan quotas
+   - the preferred node-per-user/workspace relay pattern improves isolation but may increase baseline per-paying-user cost versus a shared multi-tenant relay
 
 2. **Large transcript or tool-output syncing**
    - logs and command output can explode storage and bandwidth
@@ -201,6 +202,7 @@ Expected bottleneck:
 Focus:
 
 - regional relay architecture
+- a clear shared-vs-isolated relay cost model
 - strict plan limits
 - retention controls
 - enterprise/team support boundaries
@@ -233,4 +235,5 @@ The strongest commercial story is:
 3. Set initial retention defaults for approval/event metadata.
 4. Decide where subscription management lives; default recommendation is web-owned billing with app-consumed entitlements.
 5. Model idle WebSocket connection cost before promising always-on relay.
-6. Keep transcript/content sync out of scope until the encryption and pricing model are explicit.
+6. Model node-per-user/workspace relay costs separately from shared relay costs.
+7. Keep transcript/content sync out of scope until the encryption and pricing model are explicit.
