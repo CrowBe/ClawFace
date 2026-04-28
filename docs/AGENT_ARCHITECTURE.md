@@ -68,6 +68,7 @@ Candidate implementations:
 
 - pi.dev RPC/stdin-stdout mode as the backing harness process
 - a custom Node.js WebSocket harness
+- `scripts/openclaw-bridge.js`, the current narrow local OpenClaw bridge MVP: one repo/session binding, direct WebSocket mode, explicit context metadata, no approval-card bridging
 - an OpenClaw plugin that implements the ClawFace protocol
 
 ### 3.2 `ModelProvider`

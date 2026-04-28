@@ -1,4 +1,4 @@
-import type { Agent, Thread, Message } from '@/data/seed';
+import type { Agent, AgentContext, Thread, Message } from '@/data/seed';
 
 export type TransportEvent =
   | { type: 'message_appended'; threadId: string; message: Message }
@@ -30,7 +30,7 @@ export type ClientMessage =
 export type PairClientMessage = { type: 'pair'; code: string; clientKey: string };
 
 export type PairServerMessage =
-  | { type: 'session'; sessionKey: string; fingerprint: string }
+  | { type: 'session'; sessionKey: string; fingerprint: string; context?: AgentContext }
   | { type: 'error'; error: string };
 
 export type TransportListener<T extends TransportEvent = TransportEvent> = (event: T) => void;

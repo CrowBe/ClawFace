@@ -39,6 +39,10 @@ export default function ChatScreen() {
 
   if (!agent || !thread) return null;
 
+  const contextLine = thread.context || agent.context
+    ? `${(thread.context ?? agent.context)?.repoPath ?? (thread.context ?? agent.context)?.repoName ?? 'repo'} · ${(thread.context ?? agent.context)?.openclawThreadId ?? (thread.context ?? agent.context)?.openclawSessionId ?? 'OpenClaw'}`
+    : `${agent.name} · typing…`;
+
   const handleSend = () => {
     if (!input.trim()) return;
     sendMessage(threadId, input.trim());
@@ -59,7 +63,7 @@ export default function ChatScreen() {
         <Avatar agent={agent} size={30} />
         <View style={{ flex: 1, minWidth: 0 }}>
           <Text style={styles.threadTitle}>{thread.title}</Text>
-          <Text style={styles.agentSub}>{agent.name} · typing…</Text>
+          <Text style={styles.agentSub} numberOfLines={1}>{contextLine}</Text>
         </View>
         <TouchableOpacity
           activeOpacity={0.7}

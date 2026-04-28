@@ -55,6 +55,15 @@ interface PairingPayload {
   code: string;
   name?: string;
   secure?: boolean;
+  context?: AgentContext;
+}
+
+interface AgentContext {
+  repoPath?: string;
+  repoName?: string;
+  branch?: string;
+  openclawSessionId?: string;
+  openclawThreadId?: string;
 }
 ```
 
@@ -62,6 +71,7 @@ Notes:
 
 - `fingerprint` identifies the intended pairing server. The server must echo it in the `/pair` `session` response; the client must reject the session if it does not match the pairing payload.
 - `secure` selects `wss` when true and `ws` otherwise.
+- `context` is optional pairing metadata for local bridges. When present, clients may display it before the first thread is created; routing authority remains the server-side session key.
 
 ### Client -> server messages
 
@@ -93,6 +103,7 @@ interface PairSessionResponse {
   type: 'session';
   sessionKey: string;
   fingerprint: string;
+  context?: AgentContext;
 }
 ```
 
@@ -100,6 +111,7 @@ Fields:
 
 - `sessionKey` — bearer credential used in the `/agent` `hello` message.
 - `fingerprint` — server fingerprint echoed from the pairing payload. Clients must compare this with the payload fingerprint and abort pairing on mismatch.
+- `context` — optional local bridge metadata describing the bound repo/session target. Current fields mirror `AgentContext` above. Servers should also include the same context on created threads when they can.
 
 #### `error`
 

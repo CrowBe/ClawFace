@@ -49,6 +49,9 @@ export default function ThreadsScreen() {
   }, {});
 
   const hasPending = (t: Thread) => t.messages.some(m => m.role === 'approval' && m.status === 'pending');
+  const contextLine = agent.context
+    ? `${agent.context.repoName ?? 'repo'}${agent.context.branch ? ` · ${agent.context.branch}` : ''} · ${agent.context.openclawSessionId ?? agent.context.openclawThreadId ?? 'OpenClaw'}`
+    : agent.role;
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
@@ -60,7 +63,7 @@ export default function ThreadsScreen() {
         <Avatar agent={agent} size={34} dot={agent.online ? 'online' : 'offline'} />
         <View style={{ flex: 1 }}>
           <Text style={styles.agentName}>{agent.name}</Text>
-          <Text style={styles.agentRole}>{agent.role}</Text>
+          <Text style={styles.agentRole} numberOfLines={1}>{contextLine}</Text>
         </View>
         <TouchableOpacity
           activeOpacity={0.7}

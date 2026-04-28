@@ -31,6 +31,31 @@ npm run dev:server
 
 Paste the server's printed JSON payload into the app's pairing screen.
 
+### OpenClaw local bridge MVP
+
+The real local bridge is separate from the mock dev server. It binds ClawFace to one explicit local OpenClaw target: repo path, branch, OpenClaw session id, and thread id.
+
+```bash
+# from this repo
+OPENCLAW_SESSION_ID=agent:main:main \
+OPENCLAW_THREAD_ID=agent:main:main \
+npm run bridge:openclaw
+```
+
+Optional environment variables:
+
+- `PORT` (default `8766`)
+- `CLAWFACE_REPO_PATH` (default current directory)
+- `OPENCLAW_SESSION_ID` / `OPENCLAW_THREAD_ID` (defaults `agent:main:main`)
+
+Paste the printed JSON or `clawface://...` source into the pair screen. The paired agent and new threads display the repo/session context so replies cannot silently route through a global chat context.
+
+Current CF-014 limitations:
+
+- The bridge uses `openclaw agent --session-id ... --message ... --json` as a narrow local adapter. If that CLI path is unavailable, it returns an explicit local fallback echo and a routed completion event for testability.
+- Approval cards are intentionally not bridged here; that belongs to CF-015.
+- Unpairing sends `revoke_session`; the bridge then rejects the old session key.
+
 ### Android cleartext traffic
 
 Production builds disable Android cleartext traffic. For local LAN/WebSocket development builds only, opt in explicitly:
