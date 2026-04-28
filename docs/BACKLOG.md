@@ -574,7 +574,7 @@ The scope is the smallest possible loop that satisfies `docs/PRODUCT_CONTEXT.md`
 
 #### Acceptance criteria
 
-- [ ] Run the full M1 manual test path against a real local OpenClaw via at least one of path A (bridge, hardened by CF-023) or path B (monkey-patched local OpenClaw native server, CF-025). Not only the mock dev server, and not only the bridge fallback adapter.
+- [ ] Run the full M1 manual test path against a real local OpenClaw via at least one of path A (bridge, hardened by CF-023) or path B (ClawFace as an operator client of the OpenClaw Gateway Protocol, CF-025). Not only the mock dev server, and not only the bridge fallback adapter.
 - [ ] `README.md` has a "M1 local test path" section covering at minimum path A with the exact commands for starting the bridge and Expo app, in order, with required env vars (`CLAWFACE_REPO_PATH`, `OPENCLAW_BIN`, `OPENCLAW_SESSION_ID`, `OPENCLAW_THREAD_ID`, `CLAWFACE_ALLOW_CLEARTEXT`) and their defaults
 - [ ] If path B was used, `README.md` documents the path B run instructions (point ClawFace at a running `openclaw gateway`, complete the operator pairing handshake, exercise the M1 round-trip)
 - [ ] `README.md` documents what the maintainer should see at each step: pairing succeeds, paired Trusted Agent shows Agent Context derived from OpenClaw (`hello-ok.snapshot` / `presence` for path B; bridge stdout for path A), the bound Thread shows repo/session metadata, sent message produces an OpenClaw response in the same Thread, transport logs confirm the response came from real OpenClaw (no fallback / no echo)
