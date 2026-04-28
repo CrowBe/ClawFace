@@ -650,7 +650,7 @@ Manual MVP test:
 **Status:** TODO
 **Priority:** P0
 **Epic:** E - OpenClaw Local MVP
-**Blocked by:** CF-014, CF-004
+**Blocked by:** CF-014, CF-004, CF-018, CF-020
 
 #### Description
 
@@ -717,6 +717,270 @@ Manual only: execute the documented instructions from a clean start and verify t
 
 ---
 
+## Epic F - Architecture Deepening
+
+> These issues apply the architecture-deepening pass informed by `docs/PRODUCT_CONTEXT.md` and `docs/UBIQUITOUS_LANGUAGE.md`. The goal is to make ClawFace more testable, AI-navigable, and aligned with its product domain without speculative broad rewrites. Each issue should deepen a module by improving leverage and locality behind a smaller interface.
+
+---
+
+### CF-017 - Workstream-first domain module
+
+**Status:** TODO
+**Priority:** P0
+**Epic:** F - Architecture Deepening
+**Blocked by:** CF-014
+
+#### Description
+
+ClawFace's product model centers on Workstreams, but the current app shape is still mostly Trusted Agent / Thread first. This issue introduces a small domain module around Workstream, Thread, Participant, and Agent Context concepts without forcing a full UI rewrite.
+
+The goal is not to build blue-sky multi-agent collaboration yet. The goal is to create a seam where Workstream grouping, Thread routing, Agent Context display, and future multi-participant behavior can live with better locality.
+
+#### Acceptance criteria
+
+- [ ] Add a domain module for Workstream-oriented selectors/types/helpers
+- [ ] Represent the current single-agent Thread model without pretending multi-agent Threads are implemented
+- [ ] Keep existing paired agent and thread UI behavior working
+- [ ] Move Workstream/Thread grouping logic out of screen components where practical
+- [ ] Use terms from `docs/UBIQUITOUS_LANGUAGE.md` consistently in new code and comments
+- [ ] Add or update tests for Workstream grouping and Thread lookup/routing if a test harness exists; otherwise document the manual validation path
+
+#### Test plan
+
+```bash
+npx tsc --noEmit
+git diff --check
+```
+
+Manual: pair or seed an agent, open its Threads, and confirm existing Thread navigation and Agent Context display still work.
+
+#### Files
+
+- `data/seed.ts`
+- `store/index.ts`
+- `app/index.tsx`
+- `app/threads/[agentId].tsx`
+- `app/chat/[agentId]/[threadId].tsx`
+- new domain module path as appropriate
+
+---
+
+### CF-018 - Transport event normalization seam
+
+**Status:** TODO
+**Priority:** P0
+**Epic:** F - Architecture Deepening
+**Blocked by:** CF-001, CF-014
+
+#### Description
+
+Transport implementations currently parse and pass protocol messages into app state with limited normalization. As the OpenClaw bridge, future relay mode, streaming, duplicate delivery, and malformed payload handling grow, this creates poor locality for protocol correctness.
+
+Create a normalization seam between raw wire messages and store events. The module should validate known message shapes, normalize them into app-level events, and centralize duplicate/stale/malformed handling policy where practical.
+
+#### Acceptance criteria
+
+- [ ] Add a transport event normalization module or equivalent seam
+- [ ] Normalize WebSocket messages before they update store state
+- [ ] Handle unknown or malformed messages explicitly without crashing the app
+- [ ] Preserve existing mock and WebSocket transport behavior
+- [ ] Clarify duplicate or replay behavior for `message`, `message_delta`, approval/handoff messages, and unknown thread ids
+- [ ] Add targeted tests if a test harness exists; otherwise document smoke-test cases
+
+#### Test plan
+
+```bash
+npx tsc --noEmit
+git diff --check
+```
+
+Manual/smoke cases:
+1. Normal `thread_created` event creates or updates the expected Thread.
+2. `message_delta` and final `message` do not corrupt an existing Message.
+3. Unknown/malformed server messages are ignored or surfaced as controlled errors.
+4. Unknown thread ids do not silently attach work to the wrong Thread.
+
+#### Files
+
+- `services/transport/types.ts`
+- `services/transport/websocket.ts`
+- `services/transport/mock.ts`
+- `store/index.ts`
+- tests or smoke fixtures as appropriate
+
+---
+
+### CF-019 - Pairing workflow adapter
+
+**Status:** TODO
+**Priority:** P1
+**Epic:** F - Architecture Deepening
+**Blocked by:** CF-014
+
+#### Description
+
+`app/pair.tsx` currently owns too much of the Pairing workflow: payload parsing, WebSocket handshake, fingerprint validation, SecureStore writes, push registration, Trusted Agent creation, and navigation. Pairing is security-sensitive and product-critical, so this logic needs better locality behind a focused adapter.
+
+Create a Pairing workflow module that lets the UI remain mostly declarative while the workflow module owns Pairing orchestration and error modes.
+
+#### Acceptance criteria
+
+- [ ] Move Pairing orchestration out of `app/pair.tsx` into a focused module
+- [ ] Keep UI responsible for rendering input/progress/errors and navigation decisions only where appropriate
+- [ ] Preserve fingerprint validation and session key storage behavior
+- [ ] Preserve Agent Context metadata from bridge Pairing/session responses
+- [ ] Make error states explicit for invalid payload, invalid/expired code, fingerprint mismatch, storage failure, and connection failure
+- [ ] Add targeted tests if a test harness exists; otherwise document manual validation cases
+
+#### Test plan
+
+```bash
+npx tsc --noEmit
+git diff --check
+```
+
+Manual:
+1. Pair with a valid OpenClaw bridge payload.
+2. Try an invalid payload.
+3. Try a payload with mismatched fingerprint.
+4. Confirm paired Trusted Agent stores expected Agent Context.
+
+#### Files
+
+- `app/pair.tsx`
+- `services/secureStore.ts`
+- `services/transport/websocket.ts`
+- `store/index.ts`
+- new Pairing workflow module path as appropriate
+
+---
+
+### CF-020 - Handoff and approval lifecycle module
+
+**Status:** TODO
+**Priority:** P0
+**Epic:** F - Architecture Deepening
+**Blocked by:** CF-006, CF-018
+
+#### Description
+
+Approvals should be treated as a kind of Handoff surfaced by an Agent runtime, not as generic app alerts. Current approval expiry, pending counts, notification eligibility, stale-decision behavior, and rendering concerns are split across store, UI, and notifications.
+
+Create a lifecycle module for Handoffs and Approvals before implementing the OpenClaw approval bridge. This keeps CF-015 from baking lifecycle policy into the bridge or screens.
+
+#### Acceptance criteria
+
+- [ ] Introduce a Handoff/Approval lifecycle module with clear terms from `docs/UBIQUITOUS_LANGUAGE.md`
+- [ ] Centralize pending/actionable/expired decision logic
+- [ ] Ensure expired approvals cannot be resolved from ClawFace
+- [ ] Ensure pending counts exclude expired or already-resolved Handoffs
+- [ ] Keep existing approval cards and notification behavior working
+- [ ] Add targeted tests if a test harness exists; otherwise document manual validation cases
+
+#### Test plan
+
+```bash
+npx tsc --noEmit
+git diff --check
+```
+
+Manual:
+1. Seed or receive a pending approval and confirm it appears as actionable.
+2. Let or force it expire and confirm it is no longer actionable.
+3. Confirm notification/badge state matches actionable Handoffs only.
+
+#### Files
+
+- `store/index.ts`
+- `app/alerts.tsx`
+- `components/ApprovalCard.tsx`
+- `services/notifications.ts`
+- new Handoff lifecycle module path as appropriate
+
+---
+
+### CF-021 - OpenClaw bridge adapter deepening
+
+**Status:** TODO
+**Priority:** P1
+**Epic:** F - Architecture Deepening
+**Blocked by:** CF-014, CF-018
+
+#### Description
+
+The OpenClaw bridge MVP is intentionally a standalone script. That was the right first slice, but the bridge should not become a dumping ground for protocol, session, and harness integration logic.
+
+Deepen the bridge by moving behavior toward documented agent-side seams such as HarnessAdapter, while preserving the existing `scripts/openclaw-bridge.js` entrypoint.
+
+#### Acceptance criteria
+
+- [ ] Identify the smallest bridge seam worth extracting after applying the deletion test
+- [ ] Move session/protocol/harness logic behind a deeper module without changing the bridge CLI UX
+- [ ] Preserve `/pair` and `/agent` behavior
+- [ ] Preserve local bridge Pairing payload output
+- [ ] Preserve rejection of unknown, revoked, or mismatched sessions
+- [ ] Avoid introducing hosted relay assumptions
+
+#### Test plan
+
+```bash
+npx tsc --noEmit
+git diff --check
+node -c scripts/openclaw-bridge.js
+```
+
+Manual/smoke: start the bridge, pair, create a Thread, send a message, revoke/unpair, and confirm old sessions are rejected.
+
+#### Files
+
+- `scripts/openclaw-bridge.js`
+- `agent/interfaces/*`
+- `agent/` bridge/harness implementation files as appropriate
+- `docs/AGENT_ARCHITECTURE.md` only if the canonical seam changes
+
+---
+
+### CF-022 - Persistence and migration boundary
+
+**Status:** TODO
+**Priority:** P1
+**Epic:** F - Architecture Deepening
+**Blocked by:** CF-017, CF-019
+
+#### Description
+
+As Agent Context and future Workstream Context grow, persistence risk increases. Current persistence is useful but tied closely to full app state, while secrets live separately in SecureStore.
+
+Create a clearer persistence module boundary around durable app state, privileged secrets, and transcript/content retention so future migrations remain safe and understandable.
+
+#### Acceptance criteria
+
+- [ ] Clarify which state is durable app state, which state is privileged secret material, and which state is transcript/content
+- [ ] Centralize app-state migration logic behind a persistence module
+- [ ] Preserve SecureStore-only handling for session keys and other privileged secrets
+- [ ] Add migration coverage for current persisted schema and Agent Context fields
+- [ ] Define corrupt-payload fallback behavior
+- [ ] Avoid introducing hosted storage or sync assumptions
+
+#### Test plan
+
+```bash
+npx tsc --noEmit
+git diff --check
+```
+
+Manual: start from existing persisted local state where available and confirm agents, threads, Agent Context, and session secrets still load correctly.
+
+#### Files
+
+- `services/persistence.ts`
+- `services/secureStore.ts`
+- `store/index.ts`
+- `data/seed.ts`
+- tests or migration fixtures as appropriate
+
+---
+
 ## Issue index
 
 | Key | Title | Priority | Status | Blocked by |
@@ -734,6 +998,12 @@ Manual only: execute the documented instructions from a clean start and verify t
 | CF-011 | Headless browser tool interface | P1 | DONE | CF-010 |
 | CF-012 | Model provider interface | P1 | DONE | CF-010 |
 | CF-013 | MCP server integration interface | P1 | DONE | CF-010 |
-| CF-014 | OpenClaw local bridge MVP | P0 | TODO | CF-001, CF-010 |
-| CF-015 | OpenClaw approval bridge | P0 | TODO | CF-014, CF-004 |
+| CF-014 | OpenClaw local bridge MVP | P0 | DONE | CF-001, CF-010 |
+| CF-015 | OpenClaw approval bridge | P0 | TODO | CF-014, CF-004, CF-018, CF-020 |
 | CF-016 | Local MVP test instructions and readiness check | P1 | TODO | CF-014, CF-015 |
+| CF-017 | Workstream-first domain module | P0 | TODO | CF-014 |
+| CF-018 | Transport event normalization seam | P0 | TODO | CF-001, CF-014 |
+| CF-019 | Pairing workflow adapter | P1 | TODO | CF-014 |
+| CF-020 | Handoff and approval lifecycle module | P0 | TODO | CF-006, CF-018 |
+| CF-021 | OpenClaw bridge adapter deepening | P1 | TODO | CF-014, CF-018 |
+| CF-022 | Persistence and migration boundary | P1 | TODO | CF-017, CF-019 |
