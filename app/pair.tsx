@@ -17,8 +17,8 @@ interface AgentContext {
   repoPath?: string;
   repoName?: string;
   branch?: string;
-  openclawSessionId?: string;
-  openclawThreadId?: string;
+  agentSessionId?: string;
+  agentThreadId?: string;
 }
 
 interface PairingPayload {
@@ -125,7 +125,7 @@ export default function PairScreen() {
               if (pushToken) {
                 const agentWs = new WebSocket(agentWsUrl(payload, '/agent'));
                 agentWs.onopen = () => {
-                  agentWs.send(JSON.stringify({ type: 'hello', sessionKey: msg.sessionKey, clientVersion: '0.4.0' }));
+                  agentWs.send(JSON.stringify({ type: 'hello', sessionKey: msg.sessionKey, clientVersion: '0.5.0' }));
                   agentWs.send(JSON.stringify({ type: 'register_push', token: pushToken }));
                   agentWs.close();
                 };
@@ -226,7 +226,7 @@ export default function PairScreen() {
       <View style={styles.titleBlock}>
         <Text style={styles.title}>Pair agent</Text>
         <Text style={styles.subtitle}>
-          {stage === 'scan' && 'Point your camera at the QR code shown in OpenClaw on your machine.'}
+          {stage === 'scan' && 'Point your camera at the QR code shown by your agent runtime.'}
           {stage === 'pairing' && 'Connecting to agent…'}
           {stage === 'done' && 'Agent paired successfully.'}
           {stage === 'error' && 'Pairing failed.'}

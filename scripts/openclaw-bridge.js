@@ -40,12 +40,16 @@ function currentBranch(repoPath) {
   }
 }
 
+// The wire-protocol AgentContext fields are vendor-neutral. The bridge is a
+// local OpenClaw-specific adapter, but it advertises Agent Context using the
+// generic field names defined in docs/PROTOCOL.md so non-OpenClaw runtimes
+// can satisfy the same contract without changing the ClawFace mobile client.
 const CONTEXT = {
   repoPath: REPO_PATH,
   repoName: path.basename(REPO_PATH),
   branch: currentBranch(REPO_PATH),
-  openclawSessionId: SESSION_ID,
-  openclawThreadId: THREAD_ID,
+  agentSessionId: SESSION_ID,
+  agentThreadId: THREAD_ID,
 };
 
 function send(ws, payload) {
@@ -107,7 +111,7 @@ function sessionForHello(msg) {
   if (revokedSessionKeys.has(key)) return null;
   const session = activeSessions.get(key);
   if (!session) return null;
-  if (session.context.openclawSessionId !== SESSION_ID || session.context.openclawThreadId !== THREAD_ID) return null;
+  if (session.context.agentSessionId !== SESSION_ID || session.context.agentThreadId !== THREAD_ID) return null;
   return session;
 }
 

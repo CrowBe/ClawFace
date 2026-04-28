@@ -4,8 +4,8 @@ export interface AgentContext {
   repoPath?: string;
   repoName?: string;
   branch?: string;
-  openclawSessionId?: string;
-  openclawThreadId?: string;
+  agentSessionId?: string;
+  agentThreadId?: string;
 }
 
 export interface Agent {

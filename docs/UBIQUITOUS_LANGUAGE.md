@@ -65,7 +65,7 @@ This document defines ClawFace's product/domain language. Use these terms in pro
 
 ## Flagged ambiguities
 
-- **Workspace** is overloaded. OpenClaw and other tools already use it to mean an execution or project environment. In ClawFace product language, prefer **Workstream** for the unit of coordinated work and **Agent Context** for where an agent is acting.
+- **Workspace** is overloaded. OpenClaw and other tools already use it to mean an execution or project environment. In ClawFace product language, prefer **Workstream** for the unit of coordinated work and **Agent Context** for where an agent is acting. Note: `docs/ARCHITECTURE.md` and `docs/SCALING_AND_UNIT_ECONOMICS.md` use "workspace" specifically as an **infrastructure tenancy** term (per-account/per-relay-node, per-seat-or-workspace pricing). That infra usage is intentional and distinct from the product-domain Workstream defined here \u2014 the infra-workspace is a billing/relay-node scope, not a unit of coordinated work.
 - **Agent** is ambiguous outside AI because it may mean a sales or support representative. In product/category language, use **AI agent** or **Trusted Agent** when clarity matters.
 - **Thread** and **Workstream** must stay distinct. A **Thread** is a conversation or activity lane; a **Workstream** is the broader bounded effort.
 - **Approval** should not imply ClawFace owns permission policy. Approvals are surfaced from the **Agent runtime** when useful.

@@ -10,8 +10,7 @@ Related documents:
 - `docs/UBIQUITOUS_LANGUAGE.md` — canonical product/domain vocabulary
 - `docs/ARCHITECTURE.md` — technical/product architecture, trust boundaries, relay responsibilities, and hosted/local responsibilities
 - `docs/BACKLOG.md` — executable work backlog; not a source of product truth
-- `docs/PROTOCOL.md` — wire protocol
-- `docs/AGENT_ARCHITECTURE.md` — agent-side component architecture
+- `docs/PROTOCOL.md` — wire protocol (the only stable contract between ClawFace and any paired agent runtime)
 - `docs/SCALING_AND_UNIT_ECONOMICS.md` — business model and scaling assumptions
 
 ---

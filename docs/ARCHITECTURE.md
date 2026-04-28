@@ -2,6 +2,7 @@
 
 Status: Draft
 Created: 2026-04-27
+Updated: 2026-04-28
 
 This is the canonical product architecture document for ClawFace. If another document describes product surfaces, trust boundaries, relay responsibilities, approval safety, or hosted-vs-local responsibilities, it should defer to this file instead of repeating architecture decisions.
 
@@ -14,7 +15,6 @@ Related documents:
 - `docs/BACKLOG.md` — executable work backlog; not a source of architectural truth
 - `docs/SCALING_AND_UNIT_ECONOMICS.md` — business model, cost drivers, quotas, and scaling considerations
 - `docs/PROTOCOL.md` — canonical wire-protocol spec
-- `docs/AGENT_ARCHITECTURE.md` — canonical agent-side component spec
 
 Source-of-truth rule:
 
@@ -22,7 +22,7 @@ Source-of-truth rule:
 - product/domain terminology lives in `docs/UBIQUITOUS_LANGUAGE.md`
 - product architecture, trust boundaries, relay responsibilities, approval safety requirements, and hosted/local responsibilities live here
 - concrete WebSocket message schemas and ordering guarantees live in `docs/PROTOCOL.md`
-- agent-side harness/component internals live in `docs/AGENT_ARCHITECTURE.md`
+- agent-side harness internals are out of scope for this repository, per `docs/PRODUCT_CONTEXT.md` non-goals 1 and 2 ("Not an agent runtime", "Not a model/tool configuration system"); production agent runtimes (OpenClaw, future plugins) own their own architecture in their own repositories
 - business model, pricing assumptions, quotas, cost traps, and scaling economics live in `docs/SCALING_AND_UNIT_ECONOMICS.md`
 - `docs/BACKLOG.md` should describe work to do and link to the canonical docs; it should not become a competing architecture spec
 - `README.md` and `CLAUDE.md` may summarize and link, but should not redefine these decisions
@@ -31,17 +31,21 @@ Source-of-truth rule:
 
 ## 1. Product Premise
 
-ClawFace is an Expo mobile client for monitoring and controlling paired OpenClaw-style coding agents from a phone.
+ClawFace is an **AI agent operations app**: a mobile command surface for supervising, messaging, and safely directing work across trusted AI agents and workstreams. Coding agents are the current beachhead; the product itself is not coding-specific. The canonical product vision, audience, promises, non-goals, and milestone framing live in `docs/PRODUCT_CONTEXT.md` — this section only summarises the architectural implications.
 
-The core promise is:
+The core promise (per `docs/PRODUCT_CONTEXT.md`):
 
-- remote visibility into active coding-agent sessions
-- safe mobile approval/denial of tool requests
+- remote visibility into active **Trusted Agent** sessions
+- safe mobile **Handoff** resolution (approve/deny/quick-reply on tool requests and pauses)
 - quick replies that unblock long-running work
 - notifications for events that need human attention
-- a trusted control surface for agents already running somewhere else
+- a trusted mobile control surface for agents already running somewhere else
 
-ClawFace is a **developer-operations companion app**, not a general consumer SaaS.
+Architectural implications:
+
+- ClawFace is the mobile **command surface**; it is not an agent runtime, not a model provider, and not a tool/MCP configuration system (`docs/PRODUCT_CONTEXT.md` non-goals 1 and 2).
+- The first commercial wedge is technical users supervising coding agents (OpenClaw-style today), but the architecture must not assume the user is a developer or that the agent on the other end is a coding agent.
+- The only stable contract between ClawFace and any agent runtime is the wire protocol in `docs/PROTOCOL.md`.
 
 ---
 
@@ -56,7 +60,7 @@ Purpose:
 - build trust through inspectable local-first behaviour
 - support direct pairing with local or self-hosted agent runtimes
 - make the protocol and security posture clear
-- act as a useful open-source developer tool
+- act as a useful open-source agent-operations tool
 
 Properties:
 
@@ -92,6 +96,10 @@ Preferred deployment pattern:
 - hosted relay should prefer isolated relay nodes scoped to one user account or workspace over shared multi-tenant relay infrastructure
 - a node-per-user/workspace relay keeps cross-user routing metadata and connection state out of a shared hot path
 - shared relay infrastructure is not forbidden, but it needs an explicit privacy, cost, and operational justification before implementation
+
+Note on "workspace" terminology in this section:
+
+- `workspace` here refers to **infrastructure tenancy** — a per-account/per-workspace relay node or quota scope. It is not the same as the product-domain **Workstream** defined in `docs/UBIQUITOUS_LANGUAGE.md`, which is a unit of coordinated work owned by an Agent Operator. Avoid using "workspace" for product surfaces; reserve it for infra/tenancy.
 
 ### C. Native app surface
 
@@ -242,14 +250,15 @@ If transcript sync or history backup is ever added, it must be treated as a sepa
 
 Non-negotiables:
 
-1. ClawFace must never become accidental hosted compute for coding agents.
+1. ClawFace must never become accidental hosted compute for trusted AI agents.
 2. Hosted infrastructure routes/control signals; it does not run agents.
 3. Hosted infrastructure should not require plaintext access to prompts, code, command output, or secrets.
-4. Mobile approvals must be authenticated, replay-resistant, and scoped to a specific paired agent/session/action.
+4. Mobile approvals/Handoffs must be authenticated, replay-resistant, and scoped to a specific paired agent/session/action.
 5. Pairing must be explicit, revocable, and auditable.
 6. Push notifications must carry minimal sensitive content.
 7. Local-first/direct pairing remains valuable even if a hosted relay exists.
 8. Expensive behaviours such as always-on relay, isolated relay nodes, long retention, audit logs, and large payload sync must be explicit plan features, not accidental defaults.
+9. Agent runtimes — model providers, tool harnesses, MCP servers, browser tools — must not live in this repository. They are the responsibility of paired agent runtimes per `docs/PRODUCT_CONTEXT.md` non-goals 1 and 2.
 
 ---
 

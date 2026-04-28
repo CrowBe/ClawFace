@@ -1,8 +1,9 @@
 # ClawFace Wire Protocol
 
 Status: Draft
-Protocol version: `0.4.0`
+Protocol version: `0.5.0`
 Created: 2026-04-27
+Updated: 2026-04-28
 
 This is the canonical wire-protocol contract for the current ClawFace local/direct WebSocket flow. Product architecture, trust boundaries, hosted relay responsibilities, and approval-safety requirements live in `docs/ARCHITECTURE.md`; this document only defines endpoint behaviour, message schemas, ordering, and current protocol intent.
 
@@ -12,6 +13,11 @@ Current implementation endpoints:
 - `/agent` — persistent bidirectional agent control channel
 
 All messages are UTF-8 JSON objects with a required string `type` field. Unknown message types are currently ignored by the dev server/client unless otherwise noted.
+
+### Version history
+
+- `0.5.0` (this revision): renamed `AgentContext.openclawSessionId` to `agentSessionId` and `AgentContext.openclawThreadId` to `agentThreadId` so the wire protocol is vendor-neutral. The OpenClaw local bridge in `scripts/openclaw-bridge.js` now emits the neutral names; older clients/servers that read the OpenClaw-prefixed names must be updated. The persistence layer in `services/persistence.ts` includes a forward migration for previously paired agents.
+- `0.4.0`: prior version with vendor-prefixed `openclawSessionId` / `openclawThreadId` in `AgentContext`.
 
 ---
 
@@ -62,8 +68,8 @@ interface AgentContext {
   repoPath?: string;
   repoName?: string;
   branch?: string;
-  openclawSessionId?: string;
-  openclawThreadId?: string;
+  agentSessionId?: string;
+  agentThreadId?: string;
 }
 ```
 
@@ -132,7 +138,7 @@ Purpose: persistent bidirectional channel for connection readiness, user message
 
 - The server may send `ready` immediately after the socket opens.
 - The client must send `hello` before any authenticated agent-control messages (`user_message`, `approval_decision`, `create_thread`, `register_push`, or `revoke_session`).
-- `hello.clientVersion` is the protocol version. Current version is `0.4.0`.
+- `hello.clientVersion` is the protocol version. Current version is `0.5.0`.
 - `message_delta` chunks for one response are sent in order on a single WebSocket connection.
 - If a logical response is streamed with `message_delta`, a later final `message` for that same logical response must reuse the same id (`message.id === message_delta.msgId`) so clients can treat it as a finalize/upsert instead of a second message.
 - A server must not emit deltas for one logical response and then emit a separate final `message` with a different id for that same response.
@@ -147,14 +153,14 @@ Purpose: persistent bidirectional channel for connection readiness, user message
 interface HelloMessage {
   type: 'hello';
   sessionKey: string;
-  clientVersion: '0.4.0' | string;
+  clientVersion: '0.5.0' | string;
 }
 ```
 
 Fields:
 
 - `sessionKey` — bearer credential from `/pair`.
-- `clientVersion` — app protocol version; current implementation sends `0.4.0`.
+- `clientVersion` — app protocol version; current implementation sends `0.5.0`.
 
 #### `user_message`
 

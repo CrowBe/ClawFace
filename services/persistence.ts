@@ -1,8 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { SEED_AGENTS, SEED_THREADS, type Agent, type Thread } from '@/data/seed';
+import { SEED_AGENTS, SEED_THREADS, type Agent, type AgentContext, type Thread } from '@/data/seed';
 
 const STORAGE_KEY = 'clawface_state';
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 
 interface PersistedState {
   version: number;
@@ -16,6 +16,11 @@ interface PersistedState {
 type PersistedAppState = PersistedState['state'];
 
 type PersistedAgent = Agent | (Omit<Agent, 'mode'> & { mode?: Agent['mode']; relayUrl?: string });
+
+type LegacyAgentContext = AgentContext & {
+  openclawSessionId?: string;
+  openclawThreadId?: string;
+};
 
 export async function hydrateState(): Promise<{ agents: Agent[]; threads: Thread[]; currentAgentId: string } | null> {
   try {
@@ -39,6 +44,9 @@ function migrateState(state: PersistedAppState, fromVersion: number): PersistedA
   if (fromVersion < 2) {
     next = migrateV1ToV2(next);
   }
+  if (fromVersion < 3) {
+    next = migrateV2ToV3(next);
+  }
 
   return next;
 }
@@ -53,6 +61,37 @@ function migrateV1ToV2(state: PersistedAppState): PersistedAppState {
         mode: persisted.mode ?? 'direct',
       } satisfies Agent;
     }),
+  };
+}
+
+// V2 -> V3: rename vendor-leaked AgentContext fields
+//   openclawSessionId -> agentSessionId
+//   openclawThreadId  -> agentThreadId
+// New code only reads the neutral names; carry old values forward where the
+// new ones are absent so previously paired agents keep their context display.
+function migrateAgentContext(context: AgentContext | undefined): AgentContext | undefined {
+  if (!context) return context;
+  const legacy = context as LegacyAgentContext;
+  return {
+    repoPath: legacy.repoPath,
+    repoName: legacy.repoName,
+    branch: legacy.branch,
+    agentSessionId: legacy.agentSessionId ?? legacy.openclawSessionId,
+    agentThreadId: legacy.agentThreadId ?? legacy.openclawThreadId,
+  };
+}
+
+function migrateV2ToV3(state: PersistedAppState): PersistedAppState {
+  return {
+    ...state,
+    agents: state.agents.map(agent => ({
+      ...agent,
+      context: migrateAgentContext(agent.context),
+    })),
+    threads: state.threads.map(thread => ({
+      ...thread,
+      context: migrateAgentContext(thread.context),
+    })),
   };
 }
 

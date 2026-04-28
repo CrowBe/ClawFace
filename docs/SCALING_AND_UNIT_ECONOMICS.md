@@ -2,6 +2,7 @@
 
 Status: Draft
 Created: 2026-04-27
+Updated: 2026-04-28
 
 This document covers ClawFace's business model, cost drivers, quotas, abuse posture, and scaling considerations.
 
@@ -11,23 +12,26 @@ Architecture belongs in `docs/ARCHITECTURE.md`. This file should not redefine pr
 
 ## 1. Market Read
 
+ClawFace's product framing lives in `docs/PRODUCT_CONTEXT.md` (AI agent operations app for **Agent Operators**). The audience is broader than developers, but the **first commercial wedge** is technical users supervising coding agents — they have the highest current pain, the most willingness to pay, and the most existing tooling that makes pairing realistic.
+
 ClawFace has a different premise and target market from ScrolLess.
 
-ScrolLess is a privacy-sensitive feed product with a possible consumer/prosumer SaaS path. ClawFace is narrower and more technical:
+ScrolLess is a privacy-sensitive feed product with a possible consumer/prosumer SaaS path. ClawFace is narrower and more technical at the start:
 
-- primary users are developers already using coding agents
-- willingness to pay is tied to productivity, remote control, and operational safety
+- the first commercial wedge is technical users running coding agents (OpenClaw-style)
+- the longer-term audience is broader Agent Operators across sales/CRM, ops, and personal-assistant-style agents (per `docs/PRODUCT_CONTEXT.md` target audience)
+- willingness to pay is tied to oversight, remote control, and operational safety — not raw productivity for any one role
 - adoption depends on reliability, trust, and integration quality
-- the market is smaller, but each user may have higher professional value
+- the market is smaller than consumer SaaS, but each user may have higher professional value
 - the app must feel safe before it feels delightful
 
-This means ClawFace should not chase broad free consumer growth. It should prioritise credibility with serious agent users.
+This means ClawFace should not chase broad free consumer growth. It should prioritise credibility with serious agent operators — starting with coding-agent users, where the wedge is sharpest.
 
 ---
 
 ## 2. Business Model Read
 
-The strongest model is a **developer productivity tool with optional hosted convenience**.
+The strongest model is an **agent-operations tool with optional hosted convenience**, sold first into the coding-agent operator wedge.
 
 The local-first app and protocol build trust. Paid value should come from hosted convenience and operational features that are hard to deliver purely locally.
 
@@ -82,6 +86,7 @@ Potential cost traps:
    - many idle connections can become the main infrastructure cost
    - needs connection limits, idle timeout, reconnect backoff, and per-plan quotas
    - the preferred node-per-user/workspace relay pattern improves isolation but may increase baseline per-paying-user cost versus a shared multi-tenant relay
+   - "workspace" here is an **infra/tenancy** scope (per-account or per-relay-node), not the product-domain **Workstream** in `docs/UBIQUITOUS_LANGUAGE.md`
 
 2. **Large transcript or tool-output syncing**
    - logs and command output can explode storage and bandwidth
@@ -131,7 +136,7 @@ These are starting assumptions, not final pricing.
 ### Team
 
 - pooled agent/device limits
-- per-seat or per-workspace pricing
+- per-seat or per-workspace pricing ("workspace" here means a billing/tenancy scope, not a product-domain Workstream)
 - audit retention by plan
 - admin revocation
 - policy controls
@@ -158,7 +163,7 @@ Required before any hosted launch:
 - minimal push payloads
 - clear audit trail for security-sensitive actions
 
-A hosted relay for coding agents is security-sensitive even if it is not storing code. Treat approval actions as privileged operations.
+A hosted relay for trusted AI agents is security-sensitive even if it is not storing code. Treat approval/Handoff actions as privileged operations.
 
 ---
 
@@ -207,7 +212,7 @@ Focus:
 - retention controls
 - enterprise/team support boundaries
 
-If ClawFace reaches this scale, the product is no longer just an app. It is a small remote-control platform for coding agents.
+If ClawFace reaches this scale, the product is no longer just an app. It is a small remote-control platform for trusted AI agents — with the coding-agent operator wedge as the dominant user shape today.
 
 ---
 
@@ -224,7 +229,7 @@ ClawFace can show robust senior thinking if the project demonstrates:
 
 The strongest commercial story is:
 
-> ClawFace is a secure mobile control plane for local or self-hosted coding agents. It keeps agent execution and sensitive content out of the hosted service by default, while offering paid hosted relay, notifications, and team controls where convenience justifies the cost.
+> ClawFace is a secure mobile control plane for trusted AI agents that already run on user-controlled machines or infrastructure. The first commercial wedge is operators of local or self-hosted coding agents (OpenClaw-style). ClawFace keeps agent execution, model inference, and sensitive content out of the hosted service by default, while offering paid hosted relay, notifications, and team controls where convenience justifies the cost.
 
 ---
 

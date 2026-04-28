@@ -92,7 +92,7 @@ export default function MeScreen() {
         </Group>
 
         <Group title="About">
-          <Row label="Version" value="0.4.0" />
+          <Row label="Version" value="0.5.0" />
           <Row label="Privacy policy" value="" chevron onPress={() => router.push('/privacy')} />
           <Row label="Sign out" value="" chevron danger onPress={handleSignOut} />
         </Group>
