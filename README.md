@@ -53,14 +53,32 @@ Optional environment variables:
 
 - `PORT` (default `8766`)
 - `CLAWFACE_REPO_PATH` (default current directory)
-- `OPENCLAW_SESSION_ID` / `OPENCLAW_THREAD_ID` (defaults `agent:main:main`)
+- `OPENCLAW_SESSION_ID` / `OPENCLAW_THREAD_ID` (defaults `agent:main:main`) — OpenClaw session keys use the format `agent:<agentName>:<sessionLabel>`. The default targets the default `main` agent's `main` session, matching `openclaw`'s out-of-the-box configuration. If your `openclaw.json` uses a non-default agent name (`openclaw agent --agent ops ...`), set `OPENCLAW_SESSION_ID=agent:ops:main` etc. See https://docs.openclaw.ai for canonical OpenClaw session-key behaviour.
+- `OPENCLAW_BIN` (default `openclaw`) — path to the `openclaw` binary the bridge shells out to. Override if the binary is not on `PATH` or if you want to point at a specific build.
+- `OPENCLAW_AGENT_ARGS` (default `--local --timeout 120`) — extra args appended after `--session-id … --message … --json`. The default forces the local embedded runtime so the bridge does not silently rely on an OpenClaw Gateway. Override if you need different OpenClaw flags (e.g. `--verbose on`, `--thinking medium`).
+- `OPENCLAW_TURN_TIMEOUT_MS` (default `130000`) — wall-clock timeout for the bridge process supervising one `openclaw agent` invocation.
 
 Paste the printed JSON or `clawface://...` source into the pair screen. The paired agent and new threads display the repo/session context so replies cannot silently route through a global chat context.
 
+#### Verifying a real OpenClaw turn vs the bridge fallback
+
+The bridge does not pretend a successful turn happened when the `openclaw` CLI is missing or broken. To confirm a real OpenClaw turn:
+
+- Bridge stdout shows `[openclaw] turn ok session=...` after each user message.
+- The ClawFace thread shows the existing tool chip with `status: 'done'` and an `agent` reply with the OpenClaw response text.
+
+If the CLI is unreachable, the bridge instead:
+
+- Logs `[openclaw] FALLBACK cli unavailable session=... bin=... detail=...` to stdout.
+- Emits a `tool` chip with `name: 'openclaw_cli_unavailable'`, `status: 'failed'`, and the adapter detail in `result`.
+- Does **not** emit a `role: 'agent'` reply. The thread shows no fake OpenClaw response — only the failed tool chip.
+
+If you see a failed `openclaw_cli_unavailable` chip, fix `OPENCLAW_BIN` / `OPENCLAW_AGENT_ARGS` (or install OpenClaw) and try again.
+
 Current bridge limitations:
 
-- The bridge uses `openclaw agent --session-id ... --message ... --json` as a narrow local adapter. If that CLI path is unavailable, it returns an explicit local fallback echo and a routed completion event for testability.
-- Approval cards are intentionally not bridged here; that belongs to CF-015.
+- The bridge invokes `openclaw agent --session-id ... --message ... --json` followed by `OPENCLAW_AGENT_ARGS`. That signature follows https://docs.openclaw.ai/tools/agent-send. If a future OpenClaw build changes the flag layout, override `OPENCLAW_AGENT_ARGS` accordingly.
+- Approval cards are intentionally not bridged here; that belongs to CF-015 (Post-M1).
 - Unpairing sends `revoke_session`; the bridge then rejects the old session key.
 
 ### Android cleartext traffic

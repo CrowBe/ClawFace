@@ -16,6 +16,44 @@ Related docs:
 
 ---
 
+## Milestone 1 - Local single-thread OpenClaw connection
+
+This milestone is the executable form of the "First real product milestone" in `docs/PRODUCT_CONTEXT.md`:
+
+> A user can pair one trusted AI agent, keep workstreams distinct, and message or monitor work in the right context.
+
+For the current coding-agent beachhead this is concretely:
+
+- pair a local OpenClaw-backed agent through `scripts/openclaw-bridge.js`
+- display Agent Context (repo path, branch, agent session/thread id) so the user sees where work belongs
+- send a user message in one ClawFace Thread and receive the OpenClaw response back in the same Thread
+- never silently route OpenClaw turns through a local fallback echo that looks like a real agent reply
+- unpair/revoke cleanly
+
+Per `docs/PRODUCT_CONTEXT.md`, **Approvals are explicitly out of scope for M1.** Approval bridging and Handoff lifecycle work are tracked but treated as Post-M1.
+
+**M1 critical path:**
+
+| Issue | Status |
+|---|---|
+| CF-001 Document the wire protocol | DONE |
+| CF-002 Verify server fingerprint during pairing | DONE |
+| CF-003 Decide and implement clientKey usage | DONE |
+| CF-004 Add reqId for approval replay protection | DONE |
+| CF-005 Session revocation on unpair and sign-out | DONE |
+| CF-008 Explicit transport mode: direct vs relay | DONE |
+| CF-009 Persistence schema migration | DONE |
+| CF-014 OpenClaw local bridge MVP | DONE |
+| CF-017 Workstream-first domain module | DONE |
+| CF-018 Transport event normalization seam | DONE |
+| CF-023 Bridge CLI adapter verified against a real OpenClaw build | TODO (code-complete; e2e validation deferred to CF-016) |
+| CF-024 Document `OPENCLAW_SESSION_ID` and repo binding for first-run | DONE |
+| CF-016 M1 readiness check: boot ClawFace and connect to OpenClaw in a single thread | TODO |
+
+Everything else (CF-006, CF-007, CF-015, CF-019, CF-020, CF-021, CF-022) is **Post-M1**: useful, but not on the path to "boot ClawFace and connect to OpenClaw in a single thread."
+
+---
+
 ## Epic A - Protocol & Wire Contract
 
 ---
@@ -460,9 +498,12 @@ Manual MVP test:
 ### CF-015 - OpenClaw approval bridge
 
 **Status:** TODO
-**Priority:** P0
+**Priority:** P1
+**Milestone:** Post-M1
 **Epic:** F - OpenClaw Local MVP
 **Blocked by:** CF-014, CF-004, CF-018, CF-020
+
+> Per `docs/PRODUCT_CONTEXT.md` "First real product milestone", approvals are explicitly **not** part of M1. M1 only requires the user to pair, see Agent Context, and exchange messages in one Thread. CF-015 unlocks ClawFace as a serious mobile control surface for consequential agent actions, but it does not gate "boot up + connect in a single thread."
 
 #### Description
 
@@ -499,33 +540,130 @@ Manual:
 
 ---
 
-### CF-016 - Local MVP test instructions and readiness check
+### CF-016 - M1 readiness check: boot ClawFace and connect to OpenClaw in a single thread
 
 **Status:** TODO
-**Priority:** P1
+**Priority:** P0
+**Milestone:** M1
 **Epic:** F - OpenClaw Local MVP
-**Blocked by:** CF-014, CF-015
+**Blocked by:** CF-014, CF-018, CF-023, CF-024
+
+> This is the executable form of the M1 milestone in `docs/PRODUCT_CONTEXT.md`. It explicitly excludes approvals and async-event routing beyond the single-thread message round-trip. Approval bridging belongs to CF-015 (Post-M1), not here.
 
 #### Description
 
-After the local bridge and approval bridge are implemented, evaluate the MVP end-to-end and produce clear instructions for Ben to test locally. This issue is intentionally documentation-and-validation focused: do not declare the MVP testable until the documented path has been run.
+Validate the end-to-end M1 path against a real local OpenClaw install on the maintainer's machine, and produce clean test instructions in `README.md` so the maintainer can repeat the validation. This issue is intentionally documentation-and-validation focused: do not declare M1 reachable until the documented path has been run from a clean start.
+
+The scope is the smallest possible loop that satisfies `docs/PRODUCT_CONTEXT.md` "First real product milestone":
+
+- pair ClawFace with the local OpenClaw bridge
+- see Agent Context (repo, branch, agent session/thread id) on the paired Trusted Agent and on the bound Thread
+- send a user message in that Thread, receive the OpenClaw response back in the same Thread
+- confirm the bridge logs say a real `openclaw` CLI turn ran (not the bridge fallback adapter — see CF-023)
+- unpair and confirm the bridge rejects the old session
 
 #### Acceptance criteria
 
-- [ ] Run the full local MVP manual test path against a real OpenClaw bridge, not only the mock dev server
-- [ ] Document exact commands for starting the bridge and Expo app
-- [ ] Document what Ben should see at each step: pairing, context display, message response, async event routing, approval, unpair/revoke
-- [ ] Document known limitations and sharp edges honestly
-- [ ] Ping Ben with concise test instructions once the MVP path is validated
+- [ ] Run the full M1 manual test path against a real local OpenClaw install (not only the mock dev server, not only the bridge fallback adapter)
+- [ ] `README.md` has a "M1 local test path" section with the exact commands for starting the bridge and Expo app, in order, with required env vars (`CLAWFACE_REPO_PATH`, `OPENCLAW_BIN`, `OPENCLAW_SESSION_ID`, `OPENCLAW_THREAD_ID`, `CLAWFACE_ALLOW_CLEARTEXT`) and their defaults
+- [ ] `README.md` documents what the maintainer should see at each step: pairing succeeds, paired Trusted Agent shows Agent Context, the bound Thread shows repo/session metadata, sent message produces an OpenClaw response in the same Thread, bridge stdout logs a successful real-CLI turn (no fallback)
+- [ ] `README.md` documents how to tell a real OpenClaw turn apart from a bridge-fallback turn (per CF-023)
+- [ ] `README.md` documents known limitations and sharp edges honestly (e.g. approvals not bridged, only one bound thread per bridge instance, default session id assumes `agent:main:main`)
+- [ ] Ping the maintainer with concise test instructions once the M1 path is validated
 
 #### Test plan
 
-Manual only: execute the documented instructions from a clean start and verify they work as written.
+Manual only: execute the documented instructions from a clean start (no prior pair state) and verify they work as written, against a real local `openclaw` install. Both happy-path and unpair/revoke must work.
 
 #### Files
 
 - `README.md`
 - optional `docs/LOCAL_MVP_TESTING.md` only if README would become too long; otherwise keep the instructions in README to avoid another source of truth
+
+---
+
+### CF-023 - Bridge CLI adapter verified against a real OpenClaw build
+
+**Status:** TODO
+**Priority:** P0
+**Milestone:** M1
+**Epic:** F - OpenClaw Local MVP
+**Blocked by:** CF-014
+
+> M1 cannot be declared reachable while the bridge can silently route a "successful" OpenClaw turn through a local fallback echo. The bridge must either talk to a real `openclaw` CLI or fail loudly.
+
+#### Description
+
+`scripts/openclaw-bridge.js` currently hardcodes the `openclaw agent --session-id … --message … --json --timeout 120` invocation. That signature matches the documented `openclaw agent` CLI (https://docs.openclaw.ai/tools/agent-send), but it bakes in two assumptions that bite on first run:
+
+1. The exact CLI flags work for the maintainer's installed OpenClaw build. If they don't (different version, custom build, or different binary path), the bridge falls back to a local echo.
+2. The default OpenClaw CLI behaviour goes through the Gateway. For a local-first MVP test the bridge should force the embedded local runtime (`--local`).
+
+When the CLI fails for any reason, the bridge currently still emits a `role: 'agent'` message with the fallback text, which renders in the ClawFace thread as if OpenClaw replied. The only signal the user has is a separate tool chip with a different `name`. That is too easy to miss.
+
+This issue makes the bridge CLI configurable and makes adapter-fallback unmistakable in both the ClawFace UI and the bridge logs.
+
+#### Acceptance criteria
+
+- [x] Bridge reads CLI configuration from environment with documented defaults:
+  - `OPENCLAW_BIN` (default `openclaw`)
+  - `OPENCLAW_AGENT_ARGS` (default `--local --timeout 120`; appended after `--session-id` / `--message` / `--json`)
+  - `OPENCLAW_TURN_TIMEOUT_MS` (default `130000`)
+- [x] Bridge defaults to forcing the local OpenClaw runtime via `--local` so first-run does not silently rely on a Gateway
+- [x] When the CLI fails, the bridge does **not** emit a `role: 'agent'` message with fallback text; it emits a `role: 'tool'` message with `status: 'failed'`, a clear `name` (`openclaw_cli_unavailable`), and a `result` containing the adapter detail
+- [x] When the CLI succeeds, the bridge emits the existing tool chip + `role: 'agent'` reply unchanged
+- [x] Bridge stdout/stderr clearly distinguishes a successful real-CLI turn from a fallback (e.g. `[openclaw] turn ok session=...` vs `[openclaw] FALLBACK cli unavailable: ...`)
+- [x] `README.md` documents the new env vars and how to tell a real OpenClaw turn apart from a fallback in both the ClawFace UI and the bridge logs
+- [x] `docs/PROTOCOL.md` does not need to change (the wire-level shape stays a normal `tool`/`message`/`agent` flow); add a short note only if the new tool name needs to be acknowledged in the protocol doc
+- [x] No agent-runtime / model-provider / tool-harness / MCP code is reintroduced in this repository (per `docs/PRODUCT_CONTEXT.md` non-goals 1 and 2)
+- [ ] Validated end-to-end against a real local OpenClaw install (deferred to CF-016)
+
+#### Test plan
+
+```bash
+npx tsc --noEmit
+node -c scripts/openclaw-bridge.js
+```
+
+Manual:
+1. Start the bridge with no `openclaw` binary on `PATH`. Pair from ClawFace, send a message. Confirm the Thread shows a failed tool chip and **no** `role: 'agent'` text masquerading as an OpenClaw reply. Bridge stdout shows a `FALLBACK` log line.
+2. Start the bridge with a real `openclaw` install on `PATH`. Pair, send a message. Confirm the Thread shows a normal tool chip + agent reply. Bridge stdout shows an `ok` log line.
+3. Override `OPENCLAW_BIN=/path/to/openclaw` and `OPENCLAW_AGENT_ARGS='--local --verbose on'`. Confirm the override is used.
+
+#### Files
+
+- `scripts/openclaw-bridge.js`
+- `README.md`
+
+---
+
+### CF-024 - Document OPENCLAW_SESSION_ID and repo binding for first-run
+
+**Status:** DONE
+**Priority:** P1
+**Milestone:** M1
+**Epic:** F - OpenClaw Local MVP
+**Blocked by:** CF-014
+
+#### Description
+
+The bridge defaults `OPENCLAW_SESSION_ID` and `OPENCLAW_THREAD_ID` to `agent:main:main` with no explanation of what those values mean or how to discover the right value for a real OpenClaw install. The `agent:main:main` pattern is the documented OpenClaw default session key (default agent `main`, default session `main`), but a first-time M1 tester reading the README has no way to know that, and no way to know what to change if their OpenClaw config uses a non-default agent name.
+
+This issue keeps the default unchanged but makes the meaning, format, and override mechanism legible in `README.md`.
+
+#### Acceptance criteria
+
+- [x] `README.md` "OpenClaw local bridge" section documents the `OPENCLAW_SESSION_ID` / `OPENCLAW_THREAD_ID` format (`agent:<agentName>:<sessionLabel>`) and links to https://docs.openclaw.ai for canonical OpenClaw session-key behaviour
+- [x] `README.md` documents how to override `OPENCLAW_SESSION_ID` for a non-default OpenClaw agent configuration
+- [x] No code change unless required to keep the README example honest
+
+#### Test plan
+
+Documentation only.
+
+#### Files
+
+- `README.md`
 
 ---
 
@@ -625,9 +763,12 @@ Manual/smoke cases:
 ### CF-019 - Pairing workflow adapter
 
 **Status:** TODO
-**Priority:** P1
+**Priority:** P2
+**Milestone:** Post-M1
 **Epic:** G - Architecture Deepening
 **Blocked by:** CF-014
+
+> Refactor for locality of pairing orchestration. Not on the M1 critical path; current `app/pair.tsx` works against the bridge today. Schedule after M1 is declared reachable.
 
 #### Description
 
@@ -670,9 +811,12 @@ Manual:
 ### CF-020 - Handoff and approval lifecycle module
 
 **Status:** TODO
-**Priority:** P0
+**Priority:** P1
+**Milestone:** Post-M1
 **Epic:** G - Architecture Deepening
 **Blocked by:** CF-006, CF-018
+
+> Approvals/Handoffs are explicitly out of scope for M1 per `docs/PRODUCT_CONTEXT.md`. This module is the right home for approval lifecycle policy when CF-015 starts; it is not blocking "boot up + connect in a single thread".
 
 #### Description
 
@@ -714,9 +858,12 @@ Manual:
 ### CF-021 - OpenClaw bridge adapter deepening
 
 **Status:** TODO
-**Priority:** P1
+**Priority:** P2
+**Milestone:** Post-M1
 **Epic:** G - Architecture Deepening
-**Blocked by:** CF-014, CF-018
+**Blocked by:** CF-014, CF-018, CF-023
+
+> Refactor inside `scripts/openclaw-bridge.js`. Schedule after CF-023 lands the configurable CLI seam, so the deepening pass extracts a real shape rather than the current hardcoded one.
 
 #### Description
 
@@ -755,9 +902,12 @@ Manual/smoke: start the bridge, pair, create a Thread, send a message, revoke/un
 ### CF-022 - Persistence and migration boundary
 
 **Status:** TODO
-**Priority:** P1
+**Priority:** P2
+**Milestone:** Post-M1
 **Epic:** G - Architecture Deepening
 **Blocked by:** CF-017, CF-019
+
+> Refactor for migration safety as Agent Context grows. Existing persistence + migration is good enough for M1; schedule after M1.
 
 #### Description
 
@@ -795,27 +945,29 @@ Manual: start from existing persisted local state where available and confirm ag
 
 ## Issue index
 
-| Key | Title | Priority | Status | Blocked by |
-|---|---|---|---|---|
-| CF-001 | Document the wire protocol | P0 | DONE | - |
-| CF-002 | Verify server fingerprint during pairing | P1 | DONE | CF-001 |
-| CF-003 | Decide and implement clientKey usage | P1 | DONE | CF-001 |
-| CF-004 | Add reqId for approval replay protection | P0 | DONE | CF-001 |
-| CF-005 | Session revocation on unpair and sign-out | P1 | DONE | CF-001 |
-| CF-006 | Approval expiry (expiresAt) | P1 | DONE | CF-004 |
-| CF-007 | Push notification tap routing | P1 | DONE | - |
-| CF-008 | Explicit transport mode: direct vs relay | P2 | DONE | - |
-| CF-009 | Persistence schema migration | P2 | DONE | CF-008 |
-| CF-010 | Agent-side component architecture spec | P0 | REMOVED | CF-001 |
-| CF-011 | Headless browser tool interface | P1 | REMOVED | CF-010 |
-| CF-012 | Model provider interface | P1 | REMOVED | CF-010 |
-| CF-013 | MCP server integration interface | P1 | REMOVED | CF-010 |
-| CF-014 | OpenClaw local bridge MVP | P0 | DONE | CF-001 |
-| CF-015 | OpenClaw approval bridge | P0 | TODO | CF-014, CF-004, CF-018, CF-020 |
-| CF-016 | Local MVP test instructions and readiness check | P1 | TODO | CF-014, CF-015 |
-| CF-017 | Workstream-first domain module | P0 | DONE | CF-014 |
-| CF-018 | Transport event normalization seam | P0 | DONE | CF-001, CF-014 |
-| CF-019 | Pairing workflow adapter | P1 | TODO | CF-014 |
-| CF-020 | Handoff and approval lifecycle module | P0 | TODO | CF-006, CF-018 |
-| CF-021 | OpenClaw bridge adapter deepening | P1 | TODO | CF-014, CF-018 |
-| CF-022 | Persistence and migration boundary | P1 | TODO | CF-017, CF-019 |
+| Key | Title | Milestone | Priority | Status | Blocked by |
+|---|---|---|---|---|---|
+| CF-001 | Document the wire protocol | M1 | P0 | DONE | - |
+| CF-002 | Verify server fingerprint during pairing | M1 | P1 | DONE | CF-001 |
+| CF-003 | Decide and implement clientKey usage | M1 | P1 | DONE | CF-001 |
+| CF-004 | Add reqId for approval replay protection | M1 | P0 | DONE | CF-001 |
+| CF-005 | Session revocation on unpair and sign-out | M1 | P1 | DONE | CF-001 |
+| CF-006 | Approval expiry (expiresAt) | Post-M1 | P1 | DONE | CF-004 |
+| CF-007 | Push notification tap routing | Post-M1 | P1 | DONE | - |
+| CF-008 | Explicit transport mode: direct vs relay | M1 | P2 | DONE | - |
+| CF-009 | Persistence schema migration | M1 | P2 | DONE | CF-008 |
+| CF-010 | Agent-side component architecture spec | - | P0 | REMOVED | CF-001 |
+| CF-011 | Headless browser tool interface | - | P1 | REMOVED | CF-010 |
+| CF-012 | Model provider interface | - | P1 | REMOVED | CF-010 |
+| CF-013 | MCP server integration interface | - | P1 | REMOVED | CF-010 |
+| CF-014 | OpenClaw local bridge MVP | M1 | P0 | DONE | CF-001 |
+| CF-015 | OpenClaw approval bridge | Post-M1 | P1 | TODO | CF-014, CF-004, CF-018, CF-020 |
+| CF-016 | M1 readiness check: boot ClawFace and connect to OpenClaw in a single thread | M1 | P0 | TODO | CF-014, CF-018, CF-023, CF-024 |
+| CF-017 | Workstream-first domain module | M1 | P0 | DONE | CF-014 |
+| CF-018 | Transport event normalization seam | M1 | P0 | DONE | CF-001, CF-014 |
+| CF-019 | Pairing workflow adapter | Post-M1 | P2 | TODO | CF-014 |
+| CF-020 | Handoff and approval lifecycle module | Post-M1 | P1 | TODO | CF-006, CF-018 |
+| CF-021 | OpenClaw bridge adapter deepening | Post-M1 | P2 | TODO | CF-014, CF-018, CF-023 |
+| CF-022 | Persistence and migration boundary | Post-M1 | P2 | TODO | CF-017, CF-019 |
+| CF-023 | Bridge CLI adapter verified against a real OpenClaw build | M1 | P0 | TODO | CF-014 |
+| CF-024 | Document `OPENCLAW_SESSION_ID` and repo binding for first-run | M1 | P1 | DONE | CF-014 |

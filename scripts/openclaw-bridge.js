@@ -13,6 +13,17 @@ const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 8766;
 const REPO_PATH = path.resolve(process.env.CLAWFACE_REPO_PATH || process.cwd());
 const SESSION_ID = process.env.OPENCLAW_SESSION_ID || 'agent:main:main';
 const THREAD_ID = process.env.OPENCLAW_THREAD_ID || SESSION_ID;
+// CF-023: bridge CLI is configurable so the M1 path is honest about which
+// `openclaw` build it is targeting. Defaults match
+// https://docs.openclaw.ai/tools/agent-send and force the local embedded
+// runtime so first-run does not silently rely on a Gateway.
+const OPENCLAW_BIN = process.env.OPENCLAW_BIN || 'openclaw';
+const OPENCLAW_AGENT_ARGS = (process.env.OPENCLAW_AGENT_ARGS || '--local --timeout 120')
+  .split(/\s+/)
+  .filter(Boolean);
+const OPENCLAW_TURN_TIMEOUT_MS = process.env.OPENCLAW_TURN_TIMEOUT_MS
+  ? parseInt(process.env.OPENCLAW_TURN_TIMEOUT_MS, 10)
+  : 130_000;
 const FINGERPRINT = crypto.createHash('sha256').update(`${os.hostname()}:${REPO_PATH}:${SESSION_ID}`).digest('hex').slice(0, 16);
 const ONE_TIME_CODE = crypto.randomBytes(4).toString('hex');
 const pendingPairCodes = new Set([ONE_TIME_CODE]);
@@ -87,20 +98,22 @@ function renderAgentResult(stdout) {
 
 function runOpenClawTurn(text) {
   return new Promise((resolve) => {
-    // TODO(CF-014): replace this narrow CLI adapter with a first-class OpenClaw
-    // session event API when one is available. Today it targets an explicit
-    // session id and falls back to a local echo so bridge testing stays honest
-    // and never pretends to have delivered to OpenClaw when the CLI fails.
-    const args = ['agent', '--session-id', SESSION_ID, '--message', text, '--json', '--timeout', '120'];
-    execFile('openclaw', args, { cwd: REPO_PATH, timeout: 130_000, maxBuffer: 1024 * 1024 }, (error, stdout, stderr) => {
+    // CF-023: target a real `openclaw` CLI for the bound session. If the CLI
+    // fails for any reason (binary missing, wrong flags, runtime error), the
+    // bridge falls back loudly — it never emits a `role: 'agent'` message
+    // that masquerades as an OpenClaw reply. The caller turns the fallback
+    // into a failed tool chip in the ClawFace thread and logs it server-side.
+    const args = ['agent', '--session-id', SESSION_ID, '--message', text, '--json', ...OPENCLAW_AGENT_ARGS];
+    execFile(OPENCLAW_BIN, args, { cwd: REPO_PATH, timeout: OPENCLAW_TURN_TIMEOUT_MS, maxBuffer: 1024 * 1024 }, (error, stdout, stderr) => {
       if (!error) {
         resolve({ text: renderAgentResult(stdout), usedFallback: false });
         return;
       }
       const detail = (stderr || error.message || 'unknown error').trim().split('\n').slice(-3).join('\n');
       resolve({
-        text: `OpenClaw CLI adapter unavailable for session ${SESSION_ID}. Local bridge fallback echo: ${text}` + (detail ? `\n\nAdapter detail: ${detail}` : ''),
+        text: null,
         usedFallback: true,
+        adapterDetail: detail || 'unknown error',
       });
     });
   });
@@ -202,26 +215,47 @@ function handleAgentSocket(ws) {
           message: { id: Date.now(), role: 'tool', name: 'openclaw_agent', arg: `${CONTEXT.repoName} · ${SESSION_ID}`, status: 'running', t: 'now' },
         });
         const result = await runOpenClawTurn(String(msg.text || ''));
-        send(ws, {
-          type: 'message',
-          threadId,
-          message: { id: Date.now(), role: 'agent', text: result.text, t: 'now' },
-        });
-        setTimeout(() => {
+        if (result.usedFallback) {
+          // CF-023: never emit role:'agent' on fallback — the chat thread
+          // would render that as if OpenClaw replied. A failed tool chip with
+          // the adapter detail is the truthful state.
+          console.log(`[openclaw] FALLBACK cli unavailable session=${SESSION_ID} bin=${OPENCLAW_BIN} detail=${result.adapterDetail}`);
           send(ws, {
             type: 'message',
             threadId,
             message: {
               id: Date.now(),
               role: 'tool',
-              name: result.usedFallback ? 'openclaw_adapter_fallback' : 'openclaw_agent',
-              arg: `${CONTEXT.repoName} · ${SESSION_ID}`,
-              status: 'done',
-              result: result.usedFallback ? 'Local fallback event routed to this ClawFace thread.' : 'OpenClaw CLI turn completed for this bound session.',
+              name: 'openclaw_cli_unavailable',
+              arg: `${OPENCLAW_BIN} ${SESSION_ID}`,
+              status: 'failed',
+              result: `OpenClaw CLI unreachable. ClawFace did NOT receive an OpenClaw response. Detail: ${result.adapterDetail}`,
               t: 'now',
             },
           });
-        }, 50);
+        } else {
+          console.log(`[openclaw] turn ok session=${SESSION_ID} bin=${OPENCLAW_BIN}`);
+          send(ws, {
+            type: 'message',
+            threadId,
+            message: { id: Date.now(), role: 'agent', text: result.text, t: 'now' },
+          });
+          setTimeout(() => {
+            send(ws, {
+              type: 'message',
+              threadId,
+              message: {
+                id: Date.now(),
+                role: 'tool',
+                name: 'openclaw_agent',
+                arg: `${CONTEXT.repoName} · ${SESSION_ID}`,
+                status: 'done',
+                result: 'OpenClaw CLI turn completed for this bound session.',
+                t: 'now',
+              },
+            });
+          }, 50);
+        }
         break;
       }
       default:
@@ -240,6 +274,8 @@ server.listen(PORT, '0.0.0.0', () => {
   console.log(`Branch: ${CONTEXT.branch || '(unknown)'}`);
   console.log(`OpenClaw session: ${SESSION_ID}`);
   console.log(`OpenClaw thread: ${THREAD_ID}`);
+  console.log(`OpenClaw bin: ${OPENCLAW_BIN}`);
+  console.log(`OpenClaw agent args: ${OPENCLAW_AGENT_ARGS.join(' ') || '(none)'}`);
   console.log('\nPaste this JSON into ClawFace:');
   console.log(JSON.stringify(payload));
   console.log('\nQR/link source:');
