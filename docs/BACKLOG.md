@@ -46,7 +46,7 @@ Per `docs/PRODUCT_CONTEXT.md`, **Approvals are explicitly out of scope for M1.**
 | CF-014 OpenClaw local bridge MVP | DONE |
 | CF-017 Workstream-first domain module | DONE |
 | CF-018 Transport event normalization seam | DONE |
-| CF-023 Bridge CLI adapter verified against a real OpenClaw build | TODO (code-complete; e2e validation deferred to CF-016) |
+| CF-023 Bridge CLI adapter fallback is honest and configurable | DONE |
 | CF-024 Document `OPENCLAW_SESSION_ID` and repo binding for first-run | DONE |
 | CF-016 M1 readiness check: boot ClawFace and connect to OpenClaw in a single thread | TODO |
 
@@ -582,15 +582,15 @@ Manual only: execute the documented instructions from a clean start (no prior pa
 
 ---
 
-### CF-023 - Bridge CLI adapter verified against a real OpenClaw build
+### CF-023 - Bridge CLI adapter fallback is honest and configurable
 
-**Status:** TODO
+**Status:** DONE
 **Priority:** P0
 **Milestone:** M1
 **Epic:** F - OpenClaw Local MVP
 **Blocked by:** CF-014
 
-> M1 cannot be declared reachable while the bridge can silently route a "successful" OpenClaw turn through a local fallback echo. The bridge must either talk to a real `openclaw` CLI or fail loudly.
+> M1 cannot be declared reachable while the bridge can silently route a "successful" OpenClaw turn through a local fallback echo. The bridge must either talk to a real `openclaw` CLI or fail loudly. Real end-to-end validation against Ben's local OpenClaw install is tracked by CF-016, not by this adapter-hardening issue.
 
 #### Description
 
@@ -601,7 +601,7 @@ Manual only: execute the documented instructions from a clean start (no prior pa
 
 When the CLI fails for any reason, the bridge currently still emits a `role: 'agent'` message with the fallback text, which renders in the ClawFace thread as if OpenClaw replied. The only signal the user has is a separate tool chip with a different `name`. That is too easy to miss.
 
-This issue makes the bridge CLI configurable and makes adapter-fallback unmistakable in both the ClawFace UI and the bridge logs.
+This issue makes the bridge CLI configurable and makes adapter-fallback unmistakable in both the ClawFace UI and the bridge logs. It does not declare the full M1 path validated; CF-016 owns that end-to-end readiness check.
 
 #### Acceptance criteria
 
@@ -616,7 +616,7 @@ This issue makes the bridge CLI configurable and makes adapter-fallback unmistak
 - [x] `README.md` documents the new env vars and how to tell a real OpenClaw turn apart from a fallback in both the ClawFace UI and the bridge logs
 - [x] `docs/PROTOCOL.md` does not need to change (the wire-level shape stays a normal `tool`/`message`/`agent` flow); add a short note only if the new tool name needs to be acknowledged in the protocol doc
 - [x] No agent-runtime / model-provider / tool-harness / MCP code is reintroduced in this repository (per `docs/PRODUCT_CONTEXT.md` non-goals 1 and 2)
-- [ ] Validated end-to-end against a real local OpenClaw install (deferred to CF-016)
+- [x] Real local OpenClaw end-to-end validation is explicitly deferred to CF-016, so this issue can close once the adapter is configurable and fallback is unmistakable
 
 #### Test plan
 
@@ -627,8 +627,8 @@ node -c scripts/openclaw-bridge.js
 
 Manual:
 1. Start the bridge with no `openclaw` binary on `PATH`. Pair from ClawFace, send a message. Confirm the Thread shows a failed tool chip and **no** `role: 'agent'` text masquerading as an OpenClaw reply. Bridge stdout shows a `FALLBACK` log line.
-2. Start the bridge with a real `openclaw` install on `PATH`. Pair, send a message. Confirm the Thread shows a normal tool chip + agent reply. Bridge stdout shows an `ok` log line.
-3. Override `OPENCLAW_BIN=/path/to/openclaw` and `OPENCLAW_AGENT_ARGS='--local --verbose on'`. Confirm the override is used.
+2. Override `OPENCLAW_BIN=/path/to/openclaw` and `OPENCLAW_AGENT_ARGS='--local --verbose on'`. Confirm the override is surfaced in the startup banner and used for CLI turns.
+3. Real local OpenClaw success-path validation is performed by CF-016.
 
 #### Files
 
@@ -969,5 +969,5 @@ Manual: start from existing persisted local state where available and confirm ag
 | CF-020 | Handoff and approval lifecycle module | Post-M1 | P1 | TODO | CF-006, CF-018 |
 | CF-021 | OpenClaw bridge adapter deepening | Post-M1 | P2 | TODO | CF-014, CF-018, CF-023 |
 | CF-022 | Persistence and migration boundary | Post-M1 | P2 | TODO | CF-017, CF-019 |
-| CF-023 | Bridge CLI adapter verified against a real OpenClaw build | M1 | P0 | TODO | CF-014 |
+| CF-023 | Bridge CLI adapter fallback is honest and configurable | M1 | P0 | DONE | CF-014 |
 | CF-024 | Document `OPENCLAW_SESSION_ID` and repo binding for first-run | M1 | P1 | DONE | CF-014 |
