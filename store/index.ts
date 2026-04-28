@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { SEED_AGENTS, SEED_THREADS, type Agent, type AgentContext, type Thread, type Message } from '@/data/seed';
-import { mockTransport, wsTransport, resolveTransport } from '@/services/transport';
+import { mockTransport, wsTransport, resolveTransport, type TransportListener } from '@/services/transport';
 import { debouncedDehydrate, clearPersistedState } from '@/services/persistence';
 import { deleteSessionKey, getSessionKey } from '@/services/secureStore';
 import { scheduleLocalApprovalNotification } from '@/services/notifications';
@@ -39,7 +39,9 @@ interface State {
   rehydrateAndConnect: (saved: { agents: Agent[]; threads: Thread[]; currentAgentId: string }) => Promise<void>;
 
   appendMessage: (threadId: string, message: Message) => void;
+  appendMessageDelta: (threadId: string, message: Message) => void;
   upsertMessage: (threadId: string, message: Message) => void;
+  upsertApprovalRequest: (threadId: string, message: Message, replay?: boolean) => void;
   updateThreadPreview: (threadId: string, preview: string, updatedMin: number) => void;
   setAgentConnection: (agentId: string, online: boolean) => void;
   addThread: (thread: Thread) => void;
@@ -78,52 +80,37 @@ function notifyApprovalRequest(threadId: string, message: Message, store: { getS
   }).catch(() => {});
 }
 
-function subscribeToTransport(store: { getState: () => State }) {
-  const unsubMock = mockTransport.subscribe(event => {
-    const s = store.getState();
-    switch (event.type) {
-      case 'message_appended':
-        s.appendMessage(event.threadId, event.message);
-        break;
-      case 'message_upserted':
-        s.upsertMessage(event.threadId, event.message);
-        break;
-      case 'approval_request':
-        s.appendMessage(event.threadId, event.message);
-        scheduleExpirySweep(event.message, store);
-        notifyApprovalRequest(event.threadId, event.message, store);
-        break;
-      case 'thread_updated':
-        s.addThread(event.thread);
-        break;
-      case 'connection_changed':
-        s.setAgentConnection(event.agentId, event.online);
-        break;
-    }
-  });
+function applyTransportEvent(store: { getState: () => State }, event: Parameters<TransportListener>[0]) {
+  const s = store.getState();
+  switch (event.type) {
+    case 'message_appended':
+      s.appendMessage(event.threadId, event.message);
+      break;
+    case 'message_delta_appended':
+      s.appendMessageDelta(event.threadId, event.message);
+      break;
+    case 'message_upserted':
+      s.upsertMessage(event.threadId, event.message);
+      break;
+    case 'approval_request':
+      s.upsertApprovalRequest(event.threadId, event.message, event.replay);
+      scheduleExpirySweep(event.message, store);
+      if (!event.replay) notifyApprovalRequest(event.threadId, event.message, store);
+      break;
+    case 'thread_updated':
+      s.addThread(event.thread);
+      break;
+    case 'connection_changed':
+      s.setAgentConnection(event.agentId, event.online);
+      break;
+    case 'transport_notice':
+      break;
+  }
+}
 
-  const unsubWs = wsTransport.subscribe(event => {
-    const s = store.getState();
-    switch (event.type) {
-      case 'message_appended':
-        s.appendMessage(event.threadId, event.message);
-        break;
-      case 'message_upserted':
-        s.upsertMessage(event.threadId, event.message);
-        break;
-      case 'approval_request':
-        s.appendMessage(event.threadId, event.message);
-        scheduleExpirySweep(event.message, store);
-        notifyApprovalRequest(event.threadId, event.message, store);
-        break;
-      case 'thread_updated':
-        s.addThread(event.thread);
-        break;
-      case 'connection_changed':
-        s.setAgentConnection(event.agentId, event.online);
-        break;
-    }
-  });
+function subscribeToTransport(store: { getState: () => State }) {
+  const unsubMock = mockTransport.subscribe(event => applyTransportEvent(store, event));
+  const unsubWs = wsTransport.subscribe(event => applyTransportEvent(store, event));
 
   return () => { unsubMock(); unsubWs(); };
 }
@@ -299,7 +286,7 @@ export const useStore = create<State>((set, get) => ({
     }),
   })),
 
-  upsertMessage: (threadId, message) => set(s => ({
+  appendMessageDelta: (threadId, message) => set(s => ({
     threads: s.threads.map(t => {
       if (t.id !== threadId) return t;
       const existing = t.messages.find(m => m.id === message.id);
@@ -309,6 +296,38 @@ export const useStore = create<State>((set, get) => ({
           messages: t.messages.map(m =>
             m.id === message.id
               ? { ...m, text: (m.text ?? '') + (message.text ?? '') }
+              : m
+          ),
+        };
+      }
+      return { ...t, messages: [...t.messages, message] };
+    }),
+  })),
+
+  upsertMessage: (threadId, message) => set(s => ({
+    threads: s.threads.map(t => {
+      if (t.id !== threadId) return t;
+      const existing = t.messages.find(m => m.id === message.id);
+      if (existing) {
+        return { ...t, messages: t.messages.map(m => m.id === message.id ? { ...m, ...message } : m) };
+      }
+      return { ...t, messages: [...t.messages, message] };
+    }),
+  })),
+
+  upsertApprovalRequest: (threadId, message) => set(s => ({
+    threads: s.threads.map(t => {
+      if (t.id !== threadId) return t;
+      const existing = t.messages.find(m =>
+        (message.reqId != null && m.reqId === message.reqId)
+        || m.id === message.id
+      );
+      if (existing) {
+        return {
+          ...t,
+          messages: t.messages.map(m =>
+            ((message.reqId != null && m.reqId === message.reqId) || m.id === message.id)
+              ? { ...m, ...message }
               : m
           ),
         };

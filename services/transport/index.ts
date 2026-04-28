@@ -9,6 +9,8 @@ export type {
   TransportListener,
 } from './types';
 export { MockTransport } from './mock';
+export { TransportEventNormalizer } from './normalize';
+export type { TransportNormalizationIssue, TransportNormalizationResult } from './normalize';
 export { WebSocketTransport } from './websocket';
 
 import { MockTransport } from './mock';
