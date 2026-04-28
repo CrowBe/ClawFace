@@ -107,7 +107,7 @@ Known event families from OpenClaw docs and schema declarations:
 | --- | --- | --- |
 | Session transcript updates | `session.message` | Primary event family for a subscribed Thread/session. Treat payload IDs and route keys as opaque. |
 | Agent stream/progress | `agent` | `AgentEvent` has `{ runId, seq, stream, ts, data }`. Normalize only the `stream`/`data` shapes ClawFace understands; unknown agent stream records become controlled transport notices during development. |
-| Chat stream compatibility | `chat` | `ChatEvent` has `{ runId, sessionKey, seq, state, message?, errorMessage?, errorKind?, usage?, stopReason? }`. `state: "delta"` maps to `message_delta`; `state: "final"` maps to final message upsert; `aborted`/`error` map to transport notices or final failed assistant state. |
+| Chat stream compatibility | `chat` | `ChatEvent` has `{ runId, sessionKey, seq, state, message?, errorMessage?, errorKind?, usage?, stopReason? }`. OpenClaw `state: "delta"` carries the current buffered assistant text, so ClawFace must upsert the partial message instead of appending it as an incremental suffix. `state: "final"` maps to final message upsert; `aborted`/`error` map to transport notices or final failed assistant state. |
 | Session/workstream list updates | `sessions.changed` | Refresh or patch Workstream/Thread list without deriving route data from delimiters. |
 | Presence/agent availability | `presence`, `tick`, `health` | Update connection/presence UI only; do not create noisy alerts. |
 | Exec approval cards | `exec.approval.requested`, `exec.approval.resolved` | Requires `operator.approvals`; Post-M1 unless surfaced during M1 testing. |
