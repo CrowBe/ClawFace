@@ -11,9 +11,13 @@ const GATEWAY_TOKEN = process.env.OPENCLAW_GATEWAY_TOKEN || '';
 const REQUEST_TIMEOUT_MS = process.env.OPENCLAW_GATEWAY_TIMEOUT_MS
   ? parseInt(process.env.OPENCLAW_GATEWAY_TIMEOUT_MS, 10)
   : 10_000;
-const CLIENT_ID = 'clawface-discover';
+// OpenClaw validates client.id/client.mode against its built-in Gateway enums.
+// Until OpenClaw exposes a first-class ClawFace/mobile operator client id, use
+// the read-only probe identity and declare ClawFace in displayName/userAgent.
+const CLIENT_ID = 'openclaw-probe';
+const CLIENT_DISPLAY_NAME = 'ClawFace Gateway Discovery';
 const CLIENT_VERSION = 'cf-025-discovery';
-const CLIENT_MODE = 'operator';
+const CLIENT_MODE = 'probe';
 const ROLE = 'operator';
 const SCOPES = ['operator.read'];
 const ED25519_SPKI_PREFIX = Buffer.from('302a300506032b6570032100', 'hex');
@@ -177,6 +181,7 @@ function createGatewayClient() {
           maxProtocol: 3,
           client: {
             id: CLIENT_ID,
+            displayName: CLIENT_DISPLAY_NAME,
             version: CLIENT_VERSION,
             platform,
             deviceFamily,
@@ -189,7 +194,7 @@ function createGatewayClient() {
           permissions: {},
           auth: GATEWAY_TOKEN ? { token: GATEWAY_TOKEN } : undefined,
           locale: process.env.LANG || 'en-US',
-          userAgent: `${CLIENT_ID}/${CLIENT_VERSION}`,
+          userAgent: `clawface-gateway-discover/${CLIENT_VERSION}`,
           device: {
             id: device.deviceId,
             publicKey: device.publicKey,

@@ -60,8 +60,8 @@ ClawFace's Gateway client must wait for `event: "connect.challenge"`, then send 
 Baseline connect intent:
 
 - `role`: `operator`
-- `client.id`: a ClawFace-specific client id such as `clawface-mobile` or `clawface-discover`
-- `client.mode`: OpenClaw operator/client mode, not node mode
+- `client.id`: an OpenClaw-accepted client id. The CF-025 discovery helper uses the built-in `openclaw-probe` id until OpenClaw exposes a first-class ClawFace/mobile operator id.
+- `client.mode`: an OpenClaw-accepted non-node mode. The CF-025 discovery helper uses `probe`; the eventual app transport should use the closest upstream UI/mobile operator mode or a first-class ClawFace mode if OpenClaw adds one.
 - `auth.token`: shared Gateway token or previously-issued device token when available
 - `device`: signed device identity, including the challenge nonce, when required by Gateway auth mode
 
