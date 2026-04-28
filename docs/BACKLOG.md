@@ -767,7 +767,7 @@ Manual: pair or seed an agent, open its Threads, and confirm existing Thread nav
 
 ### CF-018 - Transport event normalization seam
 
-**Status:** TODO
+**Status:** DONE
 **Priority:** P0
 **Epic:** F - Architecture Deepening
 **Blocked by:** CF-001, CF-014
@@ -780,12 +780,12 @@ Create a normalization seam between raw wire messages and store events. The modu
 
 #### Acceptance criteria
 
-- [ ] Add a transport event normalization module or equivalent seam
-- [ ] Normalize WebSocket messages before they update store state
-- [ ] Handle unknown or malformed messages explicitly without crashing the app
-- [ ] Preserve existing mock and WebSocket transport behavior
-- [ ] Clarify duplicate or replay behavior for `message`, `message_delta`, approval/handoff messages, and unknown thread ids
-- [ ] Add targeted tests if a test harness exists; otherwise document smoke-test cases
+- [x] Add a transport event normalization module or equivalent seam
+- [x] Normalize WebSocket messages before they update store state
+- [x] Handle unknown or malformed messages explicitly without crashing the app
+- [x] Preserve existing mock and WebSocket transport behavior
+- [x] Clarify duplicate or replay behavior for `message`, `message_delta`, approval/handoff messages, and unknown thread ids
+- [x] Add targeted tests if a test harness exists; otherwise document smoke-test cases
 
 #### Test plan
 
@@ -1002,7 +1002,7 @@ Manual: start from existing persisted local state where available and confirm ag
 | CF-015 | OpenClaw approval bridge | P0 | TODO | CF-014, CF-004, CF-018, CF-020 |
 | CF-016 | Local MVP test instructions and readiness check | P1 | TODO | CF-014, CF-015 |
 | CF-017 | Workstream-first domain module | P0 | DONE | CF-014 |
-| CF-018 | Transport event normalization seam | P0 | TODO | CF-001, CF-014 |
+| CF-018 | Transport event normalization seam | P0 | DONE | CF-001, CF-014 |
 | CF-019 | Pairing workflow adapter | P1 | TODO | CF-014 |
 | CF-020 | Handoff and approval lifecycle module | P0 | TODO | CF-006, CF-018 |
 | CF-021 | OpenClaw bridge adapter deepening | P1 | TODO | CF-014, CF-018 |
