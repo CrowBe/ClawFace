@@ -83,35 +83,37 @@ The discovery script requests `operator.read` only. The eventual mobile transpor
 
 ### Gateway methods ClawFace expects to use
 
-Known candidates from the local OpenClaw Gateway documentation:
+Known candidates from local OpenClaw docs and generated Gateway schema declarations (`dist/plugin-sdk/src/gateway/protocol/schema/*.d.ts`):
 
-| ClawFace need | Candidate Gateway method(s) | Status |
+| ClawFace need | Candidate Gateway method(s) | Confirmed request shape for CF-026 planning |
 | --- | --- | --- |
-| Discover Gateway health/status | `health`, `status` | Known read-only methods; exact payloads are OpenClaw-owned. |
-| Discover connected devices/presence | `system-presence` | Known read-only method. |
-| Discover sessions | `sessions.list`, `sessions.preview`, `sessions.get` | Known read-only methods. Payload shape is not duplicated here. |
-| Subscribe to session index and messages | `sessions.subscribe`, `sessions.messages.subscribe` | Known methods; whether subscribe calls need idempotency or have side effects beyond this WS connection must be checked during app transport work. |
-| Send a user turn | `sessions.send`, possibly `chat.send` depending on selected OpenClaw surface | Not implemented in this slice. Do not guess payload schema. |
-| Steer/abort active work | `sessions.steer`, `sessions.abort`, `chat.abort` | Post-discovery until UX and method payloads are confirmed. |
-| Resolve approvals | `exec.approval.resolve`, `plugin.approval.resolve` | Requires `operator.approvals`; payloads are OpenClaw-owned. |
-| Revoke stored device token | `device.token.revoke` or related device-pairing method | Requires `operator.pairing`; exact self-revocation flow must be confirmed. |
+| Discover Gateway health/status | `health`, `status` | Read-only; payloads remain OpenClaw-owned. |
+| Discover connected devices/presence | `system-presence` | Read-only; payload remains OpenClaw-owned. |
+| Discover sessions | `sessions.list`, `sessions.preview`, `sessions.get` | `sessions.list` supports bounded query params such as `limit`, `activeMinutes`, `includeDerivedTitles`, `includeLastMessage`, `label`, `agentId`, and `search`. |
+| Subscribe to session index and messages | `sessions.subscribe`, `sessions.messages.subscribe` | `sessions.messages.subscribe` takes `{ key }` where `key` is the full opaque session key. |
+| Send a user turn into an existing session | Prefer `sessions.send` for ClawFace Thread sends | `sessions.send` takes `{ key, message, thinking?, attachments?, timeoutMs?, idempotencyKey? }`. It is the best fit for a mobile Thread bound to a known opaque OpenClaw session key. |
+| Lower-level chat send/history | `chat.history`, `chat.send`, `chat.abort` | `chat.history` takes `{ sessionKey, limit?, maxChars? }`. `chat.send` takes `{ sessionKey, message, thinking?, deliver?, attachments?, timeoutMs?, idempotencyKey }` and additional provenance/origin fields that require admin scope; ClawFace should avoid those fields. |
+| Steer/abort active work | `sessions.steer`, `sessions.abort`, `chat.abort` | Post-M1 unless the single-thread loop needs abort. Use opaque session key and Gateway-provided run id. |
+| Resolve approvals | `exec.approval.resolve`, `plugin.approval.resolve` | Requires `operator.approvals`; payloads are OpenClaw-owned and Post-M1 unless surfaced during M1 testing. |
+| Revoke stored device token | `device.token.revoke` or related device-pairing method | Requires `operator.pairing`; exact self-revocation flow must be confirmed before app integration. |
 
-Unknowns are intentional here: this slice does not implement message send, session subscriptions, approval resolution, or token storage. The app transport PR must inspect live `hello-ok.features.methods` and OpenClaw schemas before binding payloads.
+CF-026 should bind the app transport to `sessions.*` first, not `chat.*`, unless live Gateway discovery shows `sessions.send`/`sessions.messages.subscribe` are unavailable. `chat.*` remains useful for history and lower-level compatibility, but it exposes provenance/origin fields that are not part of the default mobile command surface.
 
 ### Gateway events ClawFace expects to consume
 
-Known event families from OpenClaw docs:
+Known event families from OpenClaw docs and schema declarations:
 
-| ClawFace model | Gateway event family |
-| --- | --- |
-| Agent reply/progress message | `session.message` and/or `chat`/`agent` events, depending on subscribed surface |
-| Tool activity chips | `session.tool` and tool-result/agent event payloads |
-| Session/workstream list updates | `sessions.changed` |
-| Presence/agent availability | `presence`, `tick`, `health` |
-| Exec approval cards | `exec.approval.requested`, `exec.approval.resolved` |
-| Plugin approval cards | `plugin.approval.requested`, `plugin.approval.resolved` |
+| ClawFace model | Gateway event family | CF-026 handling intent |
+| --- | --- | --- |
+| Session transcript updates | `session.message` | Primary event family for a subscribed Thread/session. Treat payload IDs and route keys as opaque. |
+| Agent stream/progress | `agent` | `AgentEvent` has `{ runId, seq, stream, ts, data }`. Normalize only the `stream`/`data` shapes ClawFace understands; unknown agent stream records become controlled transport notices during development. |
+| Chat stream compatibility | `chat` | `ChatEvent` has `{ runId, sessionKey, seq, state, message?, errorMessage?, errorKind?, usage?, stopReason? }`. `state: "delta"` maps to `message_delta`; `state: "final"` maps to final message upsert; `aborted`/`error` map to transport notices or final failed assistant state. |
+| Session/workstream list updates | `sessions.changed` | Refresh or patch Workstream/Thread list without deriving route data from delimiters. |
+| Presence/agent availability | `presence`, `tick`, `health` | Update connection/presence UI only; do not create noisy alerts. |
+| Exec approval cards | `exec.approval.requested`, `exec.approval.resolved` | Requires `operator.approvals`; Post-M1 unless surfaced during M1 testing. |
+| Plugin approval cards | `plugin.approval.requested`, `plugin.approval.resolved` | Requires `operator.approvals`; Post-M1 unless surfaced during M1 testing. |
 
-Payload shapes are not specified here because OpenClaw owns them. ClawFace's job is to normalize the subset it receives into app-domain events and surface unsupported/malformed frames as transport notices.
+OpenClaw owns full payload schemas. ClawFace's job is to normalize the subset it receives into app-domain events and surface unsupported/malformed frames as transport notices.
 
 ### ClawFace overlays
 
