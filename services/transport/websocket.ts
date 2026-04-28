@@ -1,4 +1,5 @@
-import type { Agent, Thread, Message } from '@/data/seed';
+import type { Agent, Thread } from '@/data/seed';
+import { TransportEventNormalizer } from './normalize';
 import type { AgentTransport, TransportListener, TransportEvent } from './types';
 
 type SocketState = 'disconnected' | 'connecting' | 'connected';
@@ -41,6 +42,7 @@ export class WebSocketTransport implements AgentTransport {
   private outboundBuffers = new Map<string, OutboundMessage[]>();
   private sessionKeys = new Map<string, string>();
   private pendingThreadRequests = new Map<string, PendingThreadRequest>();
+  private normalizers = new Map<string, TransportEventNormalizer>();
 
   subscribe(listener: TransportListener): () => void {
     this.listeners.add(listener);
@@ -102,56 +104,36 @@ export class WebSocketTransport implements AgentTransport {
   }
 
   private _handleMessage(agentId: string, data: string) {
-    let msg: Record<string, unknown>;
-    try {
-      msg = JSON.parse(data) as Record<string, unknown>;
-    } catch {
-      return;
-    }
+    const normalizer = this.normalizers.get(agentId) ?? new TransportEventNormalizer();
+    this.normalizers.set(agentId, normalizer);
 
-    switch (msg.type) {
-      case 'ready':
-        break;
-      case 'pong':
+    const result = normalizer.normalizeJson(data);
+
+    result.controls.forEach(control => {
+      if (control.type === 'pong') {
         this.pongPending.set(agentId, false);
-        break;
-      case 'message': {
-        const threadId = msg.threadId as string;
-        const message = msg.message as Message;
-        this.emit({ type: 'message_upserted', threadId, message });
-        break;
       }
-      case 'message_delta': {
-        const threadId = msg.threadId as string;
-        const msgId = msg.msgId as number;
-        const textDelta = msg.textDelta as string;
-        const deltaMsg: Message = { id: msgId, role: 'agent', text: textDelta, t: 'now' };
-        this.emit({ type: 'message_upserted', threadId, message: deltaMsg });
-        break;
-      }
-      case 'approval_request': {
-        const threadId = msg.threadId as string;
-        const message = msg.message as Message;
-        this.emit({ type: 'approval_request', threadId, message });
-        break;
-      }
-      case 'thread': {
-        const thread = msg.thread as Thread;
-        const clientRequestId = msg.clientRequestId as string | undefined;
-        if (clientRequestId) {
-          const pending = this.pendingThreadRequests.get(clientRequestId);
-          if (pending) {
-            clearTimeout(pending.timeout);
-            this.pendingThreadRequests.delete(clientRequestId);
-            pending.resolve(thread);
-          }
+    });
+
+    result.issues.forEach(issue => {
+      this.emit({
+        type: 'transport_notice',
+        level: issue.reason === 'server_error' ? 'error' : 'warning',
+        message: issue.message,
+      });
+    });
+
+    result.events.forEach(event => {
+      if (event.type === 'thread_updated' && event.clientRequestId) {
+        const pending = this.pendingThreadRequests.get(event.clientRequestId);
+        if (pending) {
+          clearTimeout(pending.timeout);
+          this.pendingThreadRequests.delete(event.clientRequestId);
+          pending.resolve(event.thread);
         }
-        this.emit({ type: 'thread_updated', thread });
-        break;
       }
-      case 'error':
-        break;
-    }
+      this.emit(event);
+    });
   }
 
   private _startHeartbeat(agentId: string) {
@@ -227,6 +209,7 @@ export class WebSocketTransport implements AgentTransport {
     }
     this.agents.delete(agentId);
     this.sessionKeys.delete(agentId);
+    this.normalizers.delete(agentId);
     this.states.set(agentId, 'disconnected');
     this.emit({ type: 'connection_changed', agentId, online: false });
   }

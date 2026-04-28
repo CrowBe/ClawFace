@@ -2,10 +2,12 @@ import type { Agent, AgentContext, Thread, Message } from '@/data/seed';
 
 export type TransportEvent =
   | { type: 'message_appended'; threadId: string; message: Message }
+  | { type: 'message_delta_appended'; threadId: string; message: Message }
   | { type: 'message_upserted'; threadId: string; message: Message }
-  | { type: 'approval_request'; threadId: string; message: Message }
-  | { type: 'thread_updated'; thread: Thread }
-  | { type: 'connection_changed'; agentId: string; online: boolean };
+  | { type: 'approval_request'; threadId: string; message: Message; replay?: boolean }
+  | { type: 'thread_updated'; thread: Thread; clientRequestId?: string }
+  | { type: 'connection_changed'; agentId: string; online: boolean }
+  | { type: 'transport_notice'; level: 'info' | 'warning' | 'error'; message: string };
 
 export type TransportEventType = TransportEvent['type'];
 

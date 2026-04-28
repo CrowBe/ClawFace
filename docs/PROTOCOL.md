@@ -343,6 +343,17 @@ interface ErrorMessage {
 
 ---
 
-## 3. Type reference
+## 3. Client normalization policy
+
+Inbound WebSocket messages pass through `services/transport/normalize.ts` before they update app/store state.
+
+- Unknown message types, invalid JSON, and malformed known messages are converted into controlled transport notices and ignored for state updates; they must not crash the app.
+- `message_delta` appends text to the message with `msgId` in the target thread. Deltas for an unknown `threadId` are ignored by the store rather than attached to another thread.
+- A final `message` is an idempotent upsert keyed by `message.id`. If it finalizes prior `message_delta` chunks, it replaces the partial message instead of appending duplicate final text.
+- `approval_request` handoffs are keyed by `message.reqId`. Replays update the existing approval/handoff message and should not produce duplicate pending approvals or duplicate local notifications.
+- `thread` events are idempotent upserts keyed by `thread.id`; echoed `clientRequestId` values resolve pending local create-thread requests.
+- The client does not currently implement cross-connection exactly-once delivery. Duplicate complete `message` and `thread` events are safe upserts; duplicate deltas are applied as delivered because the wire protocol does not yet include delta sequence numbers.
+
+## 4. Type reference
 
 The TypeScript definitions for app transport events and inbound server messages live in `services/transport/types.ts`.
