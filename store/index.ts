@@ -27,7 +27,7 @@ interface State {
   toggleDrawer: (v?: boolean) => void;
   resolveApproval: (threadId: string, msgId: number, decision: 'approved' | 'denied') => void;
   sendMessage: (threadId: string, text: string) => void;
-  addAgent: (name: string, host: string, sessionKey?: string, port?: number, secure?: boolean, context?: AgentContext) => Agent;
+  addAgent: (name: string, host: string, sessionKey?: string, port?: number, secure?: boolean, context?: AgentContext, transport?: Agent['transport']) => Agent;
   removeAgent: (agentId: string) => void;
   markThreadRead: (threadId: string) => void;
   setAgentFolders: (agentId: string, v: boolean) => void;
@@ -189,11 +189,11 @@ export const useStore = create<State>((set, get) => ({
     transport.sendMessage(agent.id, threadId, text).catch(() => {});
   },
 
-  addAgent: (name, host, sessionKey, port, secure, context) => {
+  addAgent: (name, host, sessionKey, port, secure, context, transportKind = 'legacy-websocket') => {
     const id = 'agent-' + Date.now();
     const newAgent: Agent = {
       id, name, mono: name.slice(0, 2).toUpperCase(), tint: '#E4DBEC',
-      role: 'newly paired', host, mode: 'direct', online: true, paired: 'just now', folders: false,
+      role: transportKind === 'openclaw-gateway' ? 'OpenClaw Gateway' : 'newly paired', host, mode: 'direct', transport: transportKind, online: true, paired: 'just now', folders: false,
       perms: { read: true, write: 'ask', shell: 'ask', network: true },
       notifs: { approvals: 'push+sound', completions: 'silent', mentions: 'push' },
       sessionKey,
@@ -208,8 +208,10 @@ export const useStore = create<State>((set, get) => ({
     }));
     setTimeout(() => set({ toast: null }), 2200);
 
-    const transport = resolveTransport(newAgent);
-    transport.connect(newAgent).catch(() => {});
+    if (transportKind !== 'openclaw-gateway') {
+      const transport = resolveTransport(newAgent);
+      transport.connect(newAgent).catch(() => {});
+    }
 
     return newAgent;
   },
