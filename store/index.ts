@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { SEED_AGENTS, SEED_THREADS, type Agent, type AgentContext, type Thread, type Message } from '@/data/seed';
-import { mockTransport, wsTransport, resolveTransport, type TransportListener } from '@/services/transport';
+import { mockTransport, openClawGatewayTransport, resolveTransport, wsTransport, type TransportListener } from '@/services/transport';
 import { debouncedDehydrate, clearPersistedState } from '@/services/persistence';
 import { deleteSessionKey, getSessionKey } from '@/services/secureStore';
 import { scheduleLocalApprovalNotification } from '@/services/notifications';
@@ -111,8 +111,9 @@ function applyTransportEvent(store: { getState: () => State }, event: Parameters
 function subscribeToTransport(store: { getState: () => State }) {
   const unsubMock = mockTransport.subscribe(event => applyTransportEvent(store, event));
   const unsubWs = wsTransport.subscribe(event => applyTransportEvent(store, event));
+  const unsubGateway = openClawGatewayTransport.subscribe(event => applyTransportEvent(store, event));
 
-  return () => { unsubMock(); unsubWs(); };
+  return () => { unsubMock(); unsubWs(); unsubGateway(); };
 }
 
 export const useStore = create<State>((set, get) => ({
@@ -244,7 +245,7 @@ export const useStore = create<State>((set, get) => ({
 
   signOut: async () => {
     const agents = get().agents;
-    await Promise.all(agents.map(a => wsTransport.revoke(a.id).catch(() => {})));
+    await Promise.all(agents.map(a => resolveTransport(a).revoke(a.id).catch(() => {})));
     await Promise.all(
       agents.map(a => deleteSessionKey(a.id).catch(() => {}))
     );
@@ -264,10 +265,10 @@ export const useStore = create<State>((set, get) => ({
     const agents = await Promise.all(
       (saved.agents.length ? saved.agents : store.agents).map(async agent => {
         const sessionKey = await getSessionKey(agent.id).catch(() => null);
-        if (!sessionKey) return { ...agent, sessionKey: undefined, online: false };
-        wsTransport.setSessionKey(agent.id, sessionKey);
-        const hydratedAgent = { ...agent, sessionKey, online: false };
-        wsTransport.connect(hydratedAgent).catch(() => {});
+        if (!sessionKey && agent.transport !== 'openclaw-gateway') return { ...agent, sessionKey: undefined, online: false };
+        if (sessionKey) wsTransport.setSessionKey(agent.id, sessionKey);
+        const hydratedAgent = { ...agent, sessionKey: sessionKey ?? undefined, online: false };
+        resolveTransport(hydratedAgent).connect(hydratedAgent).catch(() => {});
         return hydratedAgent;
       })
     );

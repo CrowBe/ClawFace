@@ -8,6 +8,8 @@ export interface AgentContext {
   agentThreadId?: string;
 }
 
+export type AgentTransportKind = 'legacy-websocket' | 'openclaw-gateway';
+
 export interface Agent {
   id: string;
   name: string;
@@ -16,6 +18,7 @@ export interface Agent {
   role: string;
   host: string;
   mode: 'direct' | 'relay';
+  transport?: AgentTransportKind;
   relayUrl?: string;
   online: boolean;
   paired: string;
