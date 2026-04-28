@@ -7,7 +7,8 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "dev:server": "node scripts/dev-server.js"
+    "dev:server": "node scripts/dev-server.js",
+    "bridge:openclaw": "node scripts/openclaw-bridge.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.91.1",

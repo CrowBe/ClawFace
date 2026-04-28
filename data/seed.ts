@@ -1,5 +1,13 @@
 export type PermValue = boolean | 'ask';
 
+export interface AgentContext {
+  repoPath?: string;
+  repoName?: string;
+  branch?: string;
+  openclawSessionId?: string;
+  openclawThreadId?: string;
+}
+
 export interface Agent {
   id: string;
   name: string;
@@ -17,6 +25,7 @@ export interface Agent {
   sessionKey?: string;
   port?: number;
   secure?: boolean;
+  context?: AgentContext;
 }
 
 export interface DiffLine {
@@ -53,6 +62,7 @@ export interface Thread {
   unread: number;
   preview: string;
   messages: Message[];
+  context?: AgentContext;
 }
 
 export interface Alert {

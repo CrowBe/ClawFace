@@ -13,6 +13,14 @@ import { wsTransport } from '@/services/transport';
 import { CloseIcon, CheckIcon } from '@/components/Icons';
 import { C } from '@/constants/colors';
 
+interface AgentContext {
+  repoPath?: string;
+  repoName?: string;
+  branch?: string;
+  openclawSessionId?: string;
+  openclawThreadId?: string;
+}
+
 interface PairingPayload {
   v: 1;
   host: string;
@@ -21,6 +29,7 @@ interface PairingPayload {
   code: string;
   name?: string;
   secure?: boolean;
+  context?: AgentContext;
 }
 
 function agentWsUrl(payload: PairingPayload, path: '/pair' | '/agent'): string {
@@ -105,7 +114,8 @@ export default function PairScreen() {
               }
 
               const name = payload.name ?? agentName;
-              const agent = addAgent(name || 'Agent', payload.host, msg.sessionKey, payload.port, payload.secure);
+              const context = (msg.context && typeof msg.context === 'object' ? msg.context : payload.context) as AgentContext | undefined;
+              const agent = addAgent(name || 'Agent', payload.host, msg.sessionKey, payload.port, payload.secure, context);
               await setSessionKey(agent.id, msg.sessionKey);
               wsTransport.setSessionKey(agent.id, msg.sessionKey);
               setPairedAgentId(agent.id);

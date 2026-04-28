@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { SEED_AGENTS, SEED_THREADS, type Agent, type Thread, type Message } from '@/data/seed';
+import { SEED_AGENTS, SEED_THREADS, type Agent, type AgentContext, type Thread, type Message } from '@/data/seed';
 import { mockTransport, wsTransport, resolveTransport } from '@/services/transport';
 import { debouncedDehydrate, clearPersistedState } from '@/services/persistence';
 import { deleteSessionKey, getSessionKey } from '@/services/secureStore';
@@ -26,7 +26,7 @@ interface State {
   toggleDrawer: (v?: boolean) => void;
   resolveApproval: (threadId: string, msgId: number, decision: 'approved' | 'denied') => void;
   sendMessage: (threadId: string, text: string) => void;
-  addAgent: (name: string, host: string, sessionKey?: string, port?: number, secure?: boolean) => Agent;
+  addAgent: (name: string, host: string, sessionKey?: string, port?: number, secure?: boolean, context?: AgentContext) => Agent;
   removeAgent: (agentId: string) => void;
   markThreadRead: (threadId: string) => void;
   setAgentFolders: (agentId: string, v: boolean) => void;
@@ -202,7 +202,7 @@ export const useStore = create<State>((set, get) => ({
     transport.sendMessage(agent.id, threadId, text).catch(() => {});
   },
 
-  addAgent: (name, host, sessionKey, port, secure) => {
+  addAgent: (name, host, sessionKey, port, secure, context) => {
     const id = 'agent-' + Date.now();
     const newAgent: Agent = {
       id, name, mono: name.slice(0, 2).toUpperCase(), tint: '#E4DBEC',
@@ -212,6 +212,7 @@ export const useStore = create<State>((set, get) => ({
       sessionKey,
       port,
       secure,
+      context,
     };
     set(s => ({
       agents: [...s.agents, newAgent],
