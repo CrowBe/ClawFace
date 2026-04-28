@@ -83,7 +83,7 @@ export class WebSocketTransport implements AgentTransport {
     ws.onopen = () => {
       this.states.set(agentId, 'connected');
       this.reconnectAttempts.set(agentId, 0);
-      ws.send(JSON.stringify({ type: 'hello', sessionKey, clientVersion: '0.4.0' }));
+      ws.send(JSON.stringify({ type: 'hello', sessionKey, clientVersion: '0.5.0' }));
       this._startHeartbeat(agentId);
       this._flushBuffer(agentId);
       this.emit({ type: 'connection_changed', agentId, online: true });

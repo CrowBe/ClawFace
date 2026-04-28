@@ -1,15 +1,18 @@
 # ClawFace
 
-Mobile agentic-workflow client — a single app for managing multiple AI coding agents (OpenClaw, Claude Code, etc.) with per-agent threads, inline approvals, and QR pairing. Aims to replace ad-hoc use of Telegram/WhatsApp for agent I/O.
+ClawFace is an Expo mobile **AI agent operations app**: a mobile command surface for supervising, messaging, and safely directing work across trusted AI agents and workstreams. The first commercial wedge is technical users supervising local OpenClaw-style coding agents, but the product is not coding-specific. See [docs/PRODUCT_CONTEXT.md](docs/PRODUCT_CONTEXT.md) for canonical product framing. Aims to replace ad-hoc use of Telegram/WhatsApp for agent I/O.
 
 ## Documentation source of truth
 
 - [README.md](README.md) is the project overview and setup entry point.
+- [docs/PRODUCT_CONTEXT.md](docs/PRODUCT_CONTEXT.md) is the canonical product vision, audience, promises, non-goals, and milestone framing.
+- [docs/UBIQUITOUS_LANGUAGE.md](docs/UBIQUITOUS_LANGUAGE.md) is the canonical product/domain vocabulary.
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) is the canonical product architecture, trust-boundary, approval-safety, relay, and hosted-vs-local responsibility document.
+- [docs/PROTOCOL.md](docs/PROTOCOL.md) is the canonical wire-protocol spec between ClawFace and any agent runtime.
 - [docs/SCALING_AND_UNIT_ECONOMICS.md](docs/SCALING_AND_UNIT_ECONOMICS.md) covers market positioning, business model, cost drivers, quotas, abuse controls, and scaling scenarios.
 - [docs/BACKLOG.md](docs/BACKLOG.md) is the executable architecture backlog. It should point to canonical docs, not redefine architecture.
-- Future detailed specs should use the planned canonical homes: `docs/PROTOCOL.md` for wire protocol after CF-001 and `docs/AGENT_ARCHITECTURE.md` for agent-side component internals after CF-010.
 - Do not create overlapping architecture/business planning docs. Update the canonical doc for the concern instead.
+- ClawFace does not implement an agent runtime, model provider, tool harness, or MCP server in this repository (per `docs/PRODUCT_CONTEXT.md` non-goals 1 and 2). Production agent runtimes (OpenClaw, future plugins) own their own architecture and live in their own repositories. The only stable contract is `docs/PROTOCOL.md`. `scripts/openclaw-bridge.js` is a thin local WebSocket-to-CLI adapter for end-to-end testing, not an agent runtime.
 
 ## Stack
 

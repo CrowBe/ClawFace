@@ -236,7 +236,7 @@ function EmptyState({ onPair }: { onPair: () => void }) {
       </View>
       <Text style={styles.emptyTitle}>No agents paired yet</Text>
       <Text style={styles.emptyBody}>
-        Run OpenClaw (or another supported agent) on your computer, then scan its QR code to start a session.
+        Run an agent runtime on your computer, then scan its QR code to start a session.
       </Text>
       <TouchableOpacity activeOpacity={0.85} onPress={onPair} style={styles.emptyBtn}>
         <Text style={styles.emptyBtnText}>Pair an agent</Text>

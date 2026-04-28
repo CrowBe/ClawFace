@@ -123,7 +123,7 @@ export function formatAgentContext(agent: Agent) {
   if (!agent.context) return agent.role;
   const label = agent.context.repoName ?? 'repo';
   const branch = agent.context.branch ? ` · ${agent.context.branch}` : '';
-  const runtime = agent.context.openclawSessionId ?? agent.context.openclawThreadId ?? 'OpenClaw';
+  const runtime = agent.context.agentSessionId ?? agent.context.agentThreadId ?? 'agent';
   return `${label}${branch} · ${runtime}`;
 }
 
@@ -131,6 +131,6 @@ export function formatThreadContext(thread: Thread, agent: Agent) {
   const context = thread.context ?? agent.context;
   if (!context) return `${agent.name} · typing…`;
   const label = context.repoPath ?? context.repoName ?? 'repo';
-  const runtime = context.openclawThreadId ?? context.openclawSessionId ?? 'OpenClaw';
+  const runtime = context.agentThreadId ?? context.agentSessionId ?? 'agent';
   return `${label} · ${runtime}`;
 }

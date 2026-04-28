@@ -5,12 +5,14 @@ Each issue is self-contained: an agent can read it, implement the change, valida
 This file is an executable backlog, not a source of architectural truth. When an issue creates or changes architecture, protocol, economics, or agent-component decisions, update the canonical document listed below rather than duplicating the decision here.
 
 Related docs:
+- `docs/PRODUCT_CONTEXT.md` - canonical product vision, audience, promises, and non-goals (source of truth for what ClawFace is and is not)
+- `docs/UBIQUITOUS_LANGUAGE.md` - canonical product/domain vocabulary
 - `docs/ARCHITECTURE.md` - canonical product architecture, trust boundary, relay, approval-safety, and hosted/local responsibility decisions
 - `docs/SCALING_AND_UNIT_ECONOMICS.md` - canonical business model, quota, cost, abuse-control, and scaling considerations
 - `docs/PROTOCOL.md` - canonical wire protocol
-- `docs/AGENT_ARCHITECTURE.md` - canonical agent-side component architecture
 - `services/transport/types.ts` - TypeScript transport interface
-- `scripts/dev-server.js` - local dev server (reference agent implementation)
+- `scripts/dev-server.js` - local dev server reference for the wire protocol
+- `scripts/openclaw-bridge.js` - thin local OpenClaw CLI adapter that satisfies the wire protocol for end-to-end testing
 
 ---
 
@@ -40,7 +42,7 @@ The protocol has two endpoints:
   - [x] All client->server message types with required fields and TypeScript types
   - [x] All server->client message types with required fields and TypeScript types
   - [x] Notes on ordering guarantees (e.g. `hello` must be first on `/agent`)
-  - [x] Version field: current protocol version is `0.4.0` (matches `clientVersion` in `websocket.ts:84`)
+  - [x] Version field: current protocol version is `0.5.0` (matches `clientVersion` in `websocket.ts`)
   - [x] Notes on `fingerprint` intent (see CF-002) and `clientKey` intent (see CF-003)
 - [x] `services/transport/types.ts` - add a typed union for all inbound server->client messages (currently only outbound event types are defined)
 - [x] No new functionality introduced - doc and types only
@@ -386,212 +388,23 @@ Manual:
 
 ---
 
-## Epic E - Agent-Side Component Architecture
+## Epic E - Agent-Side Component Architecture (REMOVED)
 
-> These issues define the agent-side harness that ClawFace pairs with. They are not changes to the ClawFace mobile app. They likely live in a separate repo (e.g. `openclaw-agent` or similar). The stable boundary is the ClawFace wire protocol (CF-001) — everything in this epic is behind it and can change freely without touching the mobile client.
+> This epic and the issues it scheduled (CF-010, CF-011, CF-012, CF-013) have been WITHDRAWN.
+>
+> They specified an in-tree agent runtime (HarnessAdapter, ModelProvider, McpServer, BrowserTool, ToolProvider) that contradicts `docs/PRODUCT_CONTEXT.md` non-goals 1 ("Not an agent runtime") and 2 ("Not a model/tool configuration system").
+>
+> The reference scaffolding under `agent/` and the standalone document `docs/AGENT_ARCHITECTURE.md` have been removed from this repository. The wire protocol in `docs/PROTOCOL.md` remains the only contract between ClawFace and any agent runtime; production agent runtimes (OpenClaw, future plugins) are responsible for their own internal architecture in their own repositories.
+>
+> The OpenClaw local bridge (`scripts/openclaw-bridge.js`) is intentionally retained as a thin WebSocket-to-CLI adapter so the wire protocol can be tested end-to-end against a real local OpenClaw install. It is not an agent runtime.
 
-**Component map:**
-
-```
-ClawFace mobile
-    |  WebSocket (CF-001 - stable boundary)
-    v
-[Harness] <-> [Model provider interface]
-    |               (Anthropic / OpenAI / Ollama / user-supplied)
-    |
-    +-> [MCP server interface] <-> [Tool implementations]
-    |                                  +- [Browser tool interface]
-    |                                  |     (Lightpanda / Playwright / mock)
-    |                                  +- [File system tool]
-    |                                  +- [Shell tool]
-    +-> [Session / pairing / approval routing]
-```
-
-Design principle: each component boundary is an interface. Swapping the harness (e.g. pi.dev -> custom), the browser (Lightpanda -> Playwright), or the model provider must not require changes to ClawFace or to sibling components. The MCP protocol is the natural tool-layer boundary.
+Issue index entries for CF-010..CF-013 are kept in the index for traceability and marked REMOVED there.
 
 ---
 
-### CF-010 - Agent-side component architecture spec
+## Epic F - OpenClaw Local MVP
 
-**Status:** DONE
-**Priority:** P0
-**Epic:** E - Agent-Side Component Architecture
-**Blocked by:** CF-001
-
-#### Description
-
-Before building any agent-side components, define the interfaces that make them substitutable. This issue produces a spec document and TypeScript interface stubs for each component boundary.
-
-**Starting point reference:** pi.dev's "primitives not features" model — the harness exposes a thin RPC/SDK surface and delegates to pluggable components. pi's RPC mode (JSON over stdin/stdout) is a candidate harness implementation; the interface should not preclude it.
-
-#### Acceptance criteria
-
-- [x] `docs/AGENT_ARCHITECTURE.md` created with:
-  - [x] Component diagram (text/ASCII) matching the map above
-  - [x] Interface contract for each boundary:
-    - `HarnessAdapter` - implements ClawFace wire protocol, delegates internally
-    - `ModelProvider` - send prompt, receive streaming response, handle tool calls
-    - `ToolProvider` - list tools, execute tool, return result
-    - `BrowserTool` - navigate, extract, interact (extends `ToolProvider`)
-    - `McpServer` - standard MCP protocol surface
-  - [x] Notes on which existing open source projects can implement each interface (pi for harness, Lightpanda/Playwright for browser, standard MCP SDKs for tool layer)
-  - [x] Compatibility note: pi.dev already handles model provider switching (15+ providers) - the `ModelProvider` interface should be compatible with pi's provider abstraction
-- [x] TypeScript interface stubs for each boundary in `agent/interfaces/` (new directory, separate from the mobile app source)
-- [x] `AGENTS.md` updated with a note that agent-side work lives in `agent/` and follows `docs/AGENT_ARCHITECTURE.md`
-
-#### Test plan
-
-```bash
-npx tsc --noEmit
-```
-
-Human review: each interface in `agent/interfaces/` maps to a section in `docs/AGENT_ARCHITECTURE.md`.
-
-#### Files
-
-- `docs/AGENT_ARCHITECTURE.md` (new)
-- `agent/interfaces/harness.ts` (new)
-- `agent/interfaces/model.ts` (new)
-- `agent/interfaces/tool.ts` (new)
-- `agent/interfaces/browser.ts` (new)
-- `agent/interfaces/mcp.ts` (new)
-- `AGENTS.md`
-
----
-
-### CF-011 - Headless browser tool interface
-
-**Status:** DONE
-**Priority:** P1
-**Epic:** E - Agent-Side Component Architecture
-**Blocked by:** CF-010
-
-#### Description
-
-Define and implement a `BrowserTool` that satisfies the `ToolProvider` interface from CF-010. The first implementation uses Lightpanda (via CDP) for performance; the interface must also be satisfiable by Playwright or a mock for testing.
-
-Lightpanda is CDP-compatible and 9x faster / 16x less memory than Chrome headless. It is open source (AGPL-3.0). For dev/test, a mock implementation that returns static HTML is sufficient.
-
-#### Acceptance criteria
-
-- [x] `agent/interfaces/browser.ts` defines `BrowserTool` extending `ToolProvider` with:
-  - `navigate(url: string): Promise<PageSnapshot>`
-  - `extract(selector: string): Promise<string>`
-  - `click(selector: string): Promise<void>`
-  - `type(selector: string, text: string): Promise<void>`
-  - `screenshot(): Promise<Buffer>`
-- [x] `agent/tools/browser-lightpanda.ts` - Lightpanda implementation using CDP (`chrome-remote-interface` or equivalent)
-- [x] `agent/tools/browser-mock.ts` - mock implementation returning static fixtures; used in tests
-- [x] Swapping `browser-lightpanda` for `browser-mock` (or Playwright) requires only changing the import in the harness config - no interface changes
-- [x] `docs/AGENT_ARCHITECTURE.md` updated: browser section notes Lightpanda as default, Playwright as drop-in alternative
-
-#### Test plan
-
-```bash
-npx tsc --noEmit
-```
-
-Integration (requires Lightpanda binary):
-1. `agent/tools/browser-lightpanda.ts` navigates to `http://example.com` and returns a non-empty `PageSnapshot`
-2. Swap to `browser-mock.ts` -> same interface, static fixture returned
-
-#### Files
-
-- `agent/interfaces/browser.ts`
-- `agent/tools/browser-lightpanda.ts` (new)
-- `agent/tools/browser-mock.ts` (new)
-- `docs/AGENT_ARCHITECTURE.md`
-
----
-
-### CF-012 - Model provider interface
-
-**Status:** DONE
-**Priority:** P1
-**Epic:** E - Agent-Side Component Architecture
-**Blocked by:** CF-010
-
-#### Description
-
-Define a `ModelProvider` interface that abstracts over LLM backends. Users supply their own API keys and choose their provider. The interface must be compatible with pi.dev's provider model (pi supports 15+ providers including Anthropic, OpenAI, Google) so that pi can be dropped in as the harness without an adapter.
-
-#### Acceptance criteria
-
-- [x] `agent/interfaces/model.ts` defines `ModelProvider` with:
-  - `complete(messages: Message[], tools: ToolSpec[]): AsyncIterable<CompletionChunk>` (streaming)
-  - `modelId: string`
-  - `provider: 'anthropic' | 'openai' | 'google' | 'ollama' | string`
-- [x] `agent/providers/anthropic.ts` - Anthropic implementation using the Anthropic SDK
-- [x] `agent/providers/openai.ts` - OpenAI-compatible implementation (also covers Ollama via base URL override)
-- [x] Provider is selected via config (environment variable or harness config file) - no harness code change required to switch
-- [x] `docs/AGENT_ARCHITECTURE.md` updated: model section notes config-driven provider selection and pi compatibility
-
-#### Test plan
-
-```bash
-npx tsc --noEmit
-```
-
-Integration:
-1. Set `ANTHROPIC_API_KEY`, send a short prompt -> streaming response received
-2. Change provider config to OpenAI-compatible -> same interface, response received
-
-#### Files
-
-- `agent/interfaces/model.ts`
-- `agent/providers/anthropic.ts` (new)
-- `agent/providers/openai.ts` (new)
-- `docs/AGENT_ARCHITECTURE.md`
-
----
-
-### CF-013 - MCP server integration interface
-
-**Status:** DONE
-**Priority:** P1
-**Epic:** E - Agent-Side Component Architecture
-**Blocked by:** CF-010
-
-#### Description
-
-The harness should discover and call tools via the Model Context Protocol (MCP) rather than hardcoding tool implementations. This allows tools (browser, file system, shell, user-supplied) to be added or removed without changing the harness.
-
-The `McpServer` interface wraps an MCP-compatible server. Tool implementations from CF-011 register themselves as MCP tools. The harness calls tools through MCP exclusively.
-
-#### Acceptance criteria
-
-- [x] `agent/interfaces/mcp.ts` defines `McpServer` with:
-  - `listTools(): Promise<ToolSpec[]>`
-  - `callTool(name: string, args: Record<string, unknown>): Promise<ToolResult>`
-  - `registerTool(spec: ToolSpec, handler: ToolHandler): void`
-- [x] `agent/mcp/server.ts` - lightweight MCP server implementation (can wrap an existing MCP SDK if suitable one exists for Node.js)
-- [x] Browser tool from CF-011 registers itself via `registerTool` at startup
-- [x] Harness uses `McpServer.listTools()` to build the tool list passed to `ModelProvider.complete()`
-- [x] Adding a new tool requires only: implement `ToolHandler`, call `registerTool` - no other harness changes
-- [x] `docs/AGENT_ARCHITECTURE.md` updated: MCP section notes the tool registration pattern
-
-#### Test plan
-
-```bash
-npx tsc --noEmit
-```
-
-Integration:
-1. Register a mock tool via `registerTool`
-2. `listTools()` returns it
-3. `callTool` with the mock tool name -> handler called, result returned
-
-#### Files
-
-- `agent/interfaces/mcp.ts`
-- `agent/mcp/server.ts` (new)
-- `docs/AGENT_ARCHITECTURE.md`
-
----
-
-## Epic E - OpenClaw Local MVP
-
-> These issues turn ClawFace from a mock-server mobile shell into a locally testable OpenClaw control surface. Keep the first bridge deliberately narrow: one local OpenClaw instance, one explicit repo/session binding, direct WebSocket mode, no hosted relay assumptions.
+> These issues turn ClawFace from a mock-server mobile shell into a locally testable OpenClaw control surface. Keep the first bridge deliberately narrow: one local OpenClaw instance, one explicit repo/session binding, direct WebSocket mode, no hosted relay assumptions. The bridge is a thin WebSocket-to-CLI adapter and is the only OpenClaw-specific code allowed in this repository — it does not implement an agent runtime.
 
 ---
 
@@ -599,8 +412,8 @@ Integration:
 
 **Status:** DONE
 **Priority:** P0
-**Epic:** E - OpenClaw Local MVP
-**Blocked by:** CF-001, CF-010
+**Epic:** F - OpenClaw Local MVP
+**Blocked by:** CF-001
 
 #### Description
 
@@ -638,7 +451,6 @@ Manual MVP test:
 #### Files
 
 - `scripts/openclaw-bridge.*` or equivalent bridge entrypoint
-- `agent/` bridge/harness implementation files as needed
 - `services/transport/types.ts` if protocol typing needs extension
 - `docs/PROTOCOL.md` if wire messages change
 - `README.md`
@@ -649,7 +461,7 @@ Manual MVP test:
 
 **Status:** TODO
 **Priority:** P0
-**Epic:** E - OpenClaw Local MVP
+**Epic:** F - OpenClaw Local MVP
 **Blocked by:** CF-014, CF-004, CF-018, CF-020
 
 #### Description
@@ -691,7 +503,7 @@ Manual:
 
 **Status:** TODO
 **Priority:** P1
-**Epic:** E - OpenClaw Local MVP
+**Epic:** F - OpenClaw Local MVP
 **Blocked by:** CF-014, CF-015
 
 #### Description
@@ -717,7 +529,7 @@ Manual only: execute the documented instructions from a clean start and verify t
 
 ---
 
-## Epic F - Architecture Deepening
+## Epic G - Architecture Deepening
 
 > These issues apply the architecture-deepening pass informed by `docs/PRODUCT_CONTEXT.md` and `docs/UBIQUITOUS_LANGUAGE.md`. The goal is to make ClawFace more testable, AI-navigable, and aligned with its product domain without speculative broad rewrites. Each issue should deepen a module by improving leverage and locality behind a smaller interface.
 
@@ -727,7 +539,7 @@ Manual only: execute the documented instructions from a clean start and verify t
 
 **Status:** DONE
 **Priority:** P0
-**Epic:** F - Architecture Deepening
+**Epic:** G - Architecture Deepening
 **Blocked by:** CF-014
 
 #### Description
@@ -769,7 +581,7 @@ Manual: pair or seed an agent, open its Threads, and confirm existing Thread nav
 
 **Status:** DONE
 **Priority:** P0
-**Epic:** F - Architecture Deepening
+**Epic:** G - Architecture Deepening
 **Blocked by:** CF-001, CF-014
 
 #### Description
@@ -814,7 +626,7 @@ Manual/smoke cases:
 
 **Status:** TODO
 **Priority:** P1
-**Epic:** F - Architecture Deepening
+**Epic:** G - Architecture Deepening
 **Blocked by:** CF-014
 
 #### Description
@@ -859,7 +671,7 @@ Manual:
 
 **Status:** TODO
 **Priority:** P0
-**Epic:** F - Architecture Deepening
+**Epic:** G - Architecture Deepening
 **Blocked by:** CF-006, CF-018
 
 #### Description
@@ -903,23 +715,24 @@ Manual:
 
 **Status:** TODO
 **Priority:** P1
-**Epic:** F - Architecture Deepening
+**Epic:** G - Architecture Deepening
 **Blocked by:** CF-014, CF-018
 
 #### Description
 
-The OpenClaw bridge MVP is intentionally a standalone script. That was the right first slice, but the bridge should not become a dumping ground for protocol, session, and harness integration logic.
+The OpenClaw bridge MVP is intentionally a standalone script. That was the right first slice, but the bridge should not become a dumping ground for protocol, session, and CLI integration logic.
 
-Deepen the bridge by moving behavior toward documented agent-side seams such as HarnessAdapter, while preserving the existing `scripts/openclaw-bridge.js` entrypoint.
+Deepen the bridge inside `scripts/openclaw-bridge.js` so session, pairing-fingerprint, and CLI-adapter responsibilities have clearer boundaries inside the script, without introducing any in-tree agent runtime, model provider, tool harness, or MCP plumbing (per `docs/PRODUCT_CONTEXT.md` non-goals 1 and 2).
 
 #### Acceptance criteria
 
 - [ ] Identify the smallest bridge seam worth extracting after applying the deletion test
-- [ ] Move session/protocol/harness logic behind a deeper module without changing the bridge CLI UX
+- [ ] Move session/protocol/CLI-adapter logic behind a deeper module *inside* `scripts/`, without changing the bridge CLI UX
 - [ ] Preserve `/pair` and `/agent` behavior
 - [ ] Preserve local bridge Pairing payload output
 - [ ] Preserve rejection of unknown, revoked, or mismatched sessions
 - [ ] Avoid introducing hosted relay assumptions
+- [ ] Do not introduce any agent runtime, model provider, tool harness, browser tool, or MCP code in this repository
 
 #### Test plan
 
@@ -934,9 +747,8 @@ Manual/smoke: start the bridge, pair, create a Thread, send a message, revoke/un
 #### Files
 
 - `scripts/openclaw-bridge.js`
-- `agent/interfaces/*`
-- `agent/` bridge/harness implementation files as appropriate
-- `docs/AGENT_ARCHITECTURE.md` only if the canonical seam changes
+- `services/transport/types.ts` if protocol typing changes
+- `docs/PROTOCOL.md` if wire messages change
 
 ---
 
@@ -944,7 +756,7 @@ Manual/smoke: start the bridge, pair, create a Thread, send a message, revoke/un
 
 **Status:** TODO
 **Priority:** P1
-**Epic:** F - Architecture Deepening
+**Epic:** G - Architecture Deepening
 **Blocked by:** CF-017, CF-019
 
 #### Description
@@ -994,11 +806,11 @@ Manual: start from existing persisted local state where available and confirm ag
 | CF-007 | Push notification tap routing | P1 | DONE | - |
 | CF-008 | Explicit transport mode: direct vs relay | P2 | DONE | - |
 | CF-009 | Persistence schema migration | P2 | DONE | CF-008 |
-| CF-010 | Agent-side component architecture spec | P0 | DONE | CF-001 |
-| CF-011 | Headless browser tool interface | P1 | DONE | CF-010 |
-| CF-012 | Model provider interface | P1 | DONE | CF-010 |
-| CF-013 | MCP server integration interface | P1 | DONE | CF-010 |
-| CF-014 | OpenClaw local bridge MVP | P0 | DONE | CF-001, CF-010 |
+| CF-010 | Agent-side component architecture spec | P0 | REMOVED | CF-001 |
+| CF-011 | Headless browser tool interface | P1 | REMOVED | CF-010 |
+| CF-012 | Model provider interface | P1 | REMOVED | CF-010 |
+| CF-013 | MCP server integration interface | P1 | REMOVED | CF-010 |
+| CF-014 | OpenClaw local bridge MVP | P0 | DONE | CF-001 |
 | CF-015 | OpenClaw approval bridge | P0 | TODO | CF-014, CF-004, CF-018, CF-020 |
 | CF-016 | Local MVP test instructions and readiness check | P1 | TODO | CF-014, CF-015 |
 | CF-017 | Workstream-first domain module | P0 | DONE | CF-014 |
