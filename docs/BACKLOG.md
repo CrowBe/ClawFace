@@ -689,15 +689,15 @@ Documentation only.
 
 > M1 validation path B. Connect ClawFace to a local OpenClaw gateway as an `operator` role client over OpenClaw's existing Gateway WebSocket Protocol — no bridge, no CLI subprocess, no upstream OpenClaw change required. Validates the M1 single-thread loop against the same control-plane surface that OpenClaw's CLI / web UI / macOS app already use.
 
-#### Background — what we found while drafting CF-025
+#### Background
 
-CF-025 was originally drafted (in PR #35) as "monkey-patch local OpenClaw to expose endpoints conformant with `docs/PROTOCOL.md`, then upstream the patch as a new OpenClaw integration." A subsequent verification pass against the OpenClaw documentation (`docs.openclaw.ai/gateway/protocol.md`, `docs.openclaw.ai/concepts/architecture.md`, `docs.openclaw.ai/channels/telegram.md`, `docs.openclaw.ai/channels/pairing.md`) showed that framing is not the cleanest path. Three concrete findings drive the rewrite:
+CF-025 replaces the earlier "monkey-patch local OpenClaw" framing with an operator-client framing. OpenClaw already documents a Gateway WebSocket Protocol for control-plane clients (`operator`) and capability providers (`node`), so ClawFace should validate whether it can use that surface directly instead of inventing or upstreaming a separate ClawFace-only transport.
 
-1. **OpenClaw already exposes a documented, stable WebSocket Gateway Protocol** at `127.0.0.1:18789` (configurable). The protocol distinguishes two roles: `operator` (CLI, web UI, macOS app, automations — control-plane clients that talk to and watch agents) and `node` (macOS/iOS/Android/headless devices that expose capabilities like `camera.*`, `canvas.*`, `screen.record`). ClawFace fits the `operator` role exactly: a mobile control-plane client that messages the agent and renders its replies + tool/approval state.
-2. **`docs/PROTOCOL.md` is structurally a parallel-invention of the OpenClaw Gateway Protocol.** Both protocols use WebSocket + JSON, both use a `connect`/`hello` handshake with a signed challenge, both use `req`/`res`/`event` (or close cousins), both require idempotency keys / `reqId` for side-effecting methods, both pair via approval, both use device tokens, both isolate sessions by a key with a `:topic:` suffix for forum-style threading. There is no real protocol design difference that justifies a separate ClawFace-only wire format.
-3. **The bridge's job is now even smaller than we thought.** The bridge translates ClawFace's wire protocol to OpenClaw's `agent` CLI subprocess. But OpenClaw's gateway already exposes a structured `agent` request method over its own WebSocket protocol. So the production transport already exists upstream — ClawFace just needs to speak it.
+Keep architecture rationale in the canonical docs while implementing this issue:
 
-The "monkey-patch a new server into OpenClaw and upstream it" framing is therefore wrong. The right framing is: **ClawFace is a new operator-class client of the OpenClaw Gateway Protocol.** The upstream "PR" we may eventually need is small or zero — possibly some mobile-friendly UX touches (operator-pairing QR helpers, scope additions for mobile-specific approval flows). It is not a new protocol or a new channel.
+- `docs/ARCHITECTURE.md` should own the ClawFace ↔ OpenClaw responsibility boundary and explain why ClawFace is an operator-class mobile command surface rather than a channel handler or agent runtime.
+- `docs/PROTOCOL.md` should own the resulting protocol profile/overlay and reference OpenClaw's Gateway Protocol for OpenClaw-owned frame shapes, methods, events, and pairing semantics.
+- This backlog issue should stay executable: implement the transport, update the canonical docs, run the M1 path B validation, and record any upstream OpenClaw gaps discovered while doing that work.
 
 #### Description
 
@@ -705,17 +705,13 @@ CF-025 implements an OpenClaw Gateway Protocol transport in ClawFace's `services
 
 The OpenClaw side requires no monkey-patching. CF-025's deliverables are entirely on the ClawFace side: a Gateway Protocol transport, a pairing flow that produces a device token, mapping from OpenClaw's session keys / `agent` events / approval shapes onto ClawFace's domain model (Workstream / Thread / Agent Context / `Message`), and clear documentation of what `docs/PROTOCOL.md` becomes.
 
-#### What `docs/PROTOCOL.md` becomes
+#### Documentation boundary
 
-CF-025 closes the gap between two protocols by recasting `docs/PROTOCOL.md` as **ClawFace's profile of the OpenClaw Gateway Protocol** — a thin overlay document, not a parallel spec. The overlay covers only:
+CF-025 must update the canonical docs rather than turning this backlog item into the architectural source of truth:
 
-- which OpenClaw Gateway Protocol methods ClawFace uses (`connect`, `health`, `agent`, `send`, `system-presence`, etc.)
-- which OpenClaw events ClawFace consumes (`agent` streaming, `presence`, `tick`, `shutdown`, etc.)
-- the `operator` scope set ClawFace requires (likely `operator.read`, `operator.write`, `operator.approvals`, possibly `operator.pairing`)
-- the mobile-specific UX overlays ClawFace adds on top: pairing QR format, Agent Context render hints, push-notification routing for approval requests
-- the small set of legitimate ClawFace-only extensions (if any) — kept narrow and namespaced explicitly so they don't leak back into the protocol shape
-
-Any wire-format spec that is genuinely OpenClaw's job to own (frame shapes, method definitions, event types) is **deleted** from `docs/PROTOCOL.md` and replaced with a reference to `docs.openclaw.ai/gateway/protocol`. ClawFace stops claiming ownership of the wire protocol; it owns its profile and overlays only.
+- `docs/PROTOCOL.md` becomes a ClawFace profile/overlay for the OpenClaw Gateway Protocol if the implementation confirms the gateway surface is sufficient for M1 path B.
+- `docs/ARCHITECTURE.md` records the product/runtime boundary and any deliberate divergence between ClawFace product language and OpenClaw protocol language.
+- Any OpenClaw-owned wire-format detail should be referenced, not duplicated.
 
 #### Acceptance criteria
 
@@ -723,9 +719,9 @@ Any wire-format spec that is genuinely OpenClaw's job to own (frame shapes, meth
 
 - [ ] A new ClawFace transport (e.g. `services/transport/openclaw-gateway.ts`) that implements the OpenClaw Gateway Protocol `connect` handshake at protocol version 3 with `role: "operator"` and the minimum scopes ClawFace needs (`operator.read`, `operator.write`, plus `operator.approvals` if the M1 thread needs approval surfacing).
 - [ ] Pairing flow that collects an OpenClaw gateway address + auth (token or device pairing approval), goes through OpenClaw's `connect.challenge` signed handshake, and stores the resulting `deviceToken` in `services/secureStore.ts`. No bespoke ClawFace pairing handshake.
-- [ ] Round-trip support for `req:agent` and streaming `event:agent` payloads, mapped onto ClawFace's existing `Message` discriminated union (user / agent / tool / approval) with `message_delta` semantics covering OpenClaw's streamed agent updates.
-- [ ] Session-key handling that respects OpenClaw's `agent:<agentName>:<session>` and `agent:<agentName>:<session>:topic:<threadId>` formats (per `docs.openclaw.ai/channels/telegram` "Forum topics append `:topic:`"). ClawFace's `agentSessionId` / `agentThreadId` fields map straight onto these.
-- [ ] Idempotency keys are sent on every side-effecting method (`agent`, `send`) per OpenClaw's protocol requirement; ClawFace's existing `reqId` shape can be reused or aligned.
+- [ ] Round-trip support for the OpenClaw Gateway method(s) that send a user turn into an agent session (for example `chat.send`, `sessions.send`, or the current discovered equivalent), plus the streamed agent/session events returned by the gateway. Map these onto ClawFace's existing `Message` discriminated union (user / agent / tool / approval), including `message_delta` semantics where OpenClaw streams partial agent output.
+- [ ] Session and thread identifiers are treated as opaque strings. If OpenClaw exposes a composite session key, ClawFace stores and routes with the full key or with separately-provided opaque fields; it must not split IDs on delimiters such as `:` or `:topic:`.
+- [ ] Idempotency keys are sent on every side-effecting Gateway method used for message send / delivery. ClawFace's existing `reqId` shape can be reused or aligned.
 - [ ] `services/transport/normalize.ts` is extended to validate OpenClaw Gateway Protocol frames in the same way it currently validates `services/transport/websocket.ts` frames. Frame-shape mismatches surface as `malformed` events rather than crashing.
 
 **M1 single-thread round-trip (validates path B)**
@@ -740,10 +736,10 @@ Any wire-format spec that is genuinely OpenClaw's job to own (frame shapes, meth
 
 **`docs/PROTOCOL.md` reshape**
 
-- [ ] `docs/PROTOCOL.md` is rewritten as a profile/overlay document referencing `docs.openclaw.ai/gateway/protocol` for the wire format. Any text that duplicates OpenClaw's protocol spec is deleted.
-- [ ] The overlay enumerates: methods ClawFace uses, events ClawFace consumes, scope set, mobile UX overlays, narrow ClawFace-only extensions (if any).
+- [ ] `docs/PROTOCOL.md` is rewritten as a profile/overlay document referencing OpenClaw's Gateway Protocol for the wire format. Any text that duplicates OpenClaw-owned protocol details is deleted or replaced with a reference.
+- [ ] The overlay enumerates: Gateway methods ClawFace uses, events ClawFace consumes, scope set, mobile UX overlays, narrow ClawFace-only extensions (if any), and the opaque identifiers ClawFace stores.
 - [ ] `docs/UBIQUITOUS_LANGUAGE.md` is updated where ClawFace's vocabulary diverges from OpenClaw's (`session` / `topic` / `node` / `operator` / `device` / `pairing` / `approval`). Cheap alignments are taken; deliberate divergences are justified inline.
-- [ ] `docs/ARCHITECTURE.md` is updated to reference OpenClaw's Gateway Protocol architecture (`docs.openclaw.ai/concepts/architecture.md`) where applicable, instead of describing ClawFace's transport in isolation.
+- [ ] `docs/ARCHITECTURE.md` is updated to reference OpenClaw's Gateway Protocol architecture where applicable, instead of describing ClawFace's transport in isolation.
 
 **Upstream-OpenClaw work (if any)**
 
@@ -755,7 +751,7 @@ Any wire-format spec that is genuinely OpenClaw's job to own (frame shapes, meth
 Verification (paper):
 
 1. Walk `docs/PROTOCOL.md` against `docs.openclaw.ai/gateway/protocol`. For each pair / agent / approval / session surface, confirm OpenClaw already covers it. Mark any genuinely missing surface as a candidate upstream extension.
-2. Confirm session-key compatibility with `agent:<agentName>:<session>:topic:<threadId>` against ClawFace's `agentSessionId` / `agentThreadId` shape.
+2. Confirm identifier compatibility without delimiter parsing: ClawFace either stores the full OpenClaw session/thread key as one opaque value or consumes separately-provided opaque fields from the gateway.
 3. Confirm scope mapping: which OpenClaw operator scopes does each ClawFace UI surface need.
 
 Manual (path B run):
