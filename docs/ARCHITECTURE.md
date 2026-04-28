@@ -2,7 +2,7 @@
 
 Status: Draft
 Created: 2026-04-27
-Updated: 2026-04-28
+Updated: 2026-04-29
 
 This is the canonical product architecture document for ClawFace. If another document describes product surfaces, trust boundaries, relay responsibilities, approval safety, or hosted-vs-local responsibilities, it should defer to this file instead of repeating architecture decisions.
 
@@ -44,8 +44,9 @@ The core promise (per `docs/PRODUCT_CONTEXT.md`):
 Architectural implications:
 
 - ClawFace is the mobile **command surface**; it is not an agent runtime, not a model provider, and not a tool/MCP configuration system (`docs/PRODUCT_CONTEXT.md` non-goals 1 and 2).
+- For OpenClaw integration, ClawFace is an **operator-class client** of the OpenClaw Gateway Protocol. It sits alongside the OpenClaw CLI, web UI, and native apps as a control-plane surface for an Agent Operator. It is not an OpenClaw node, runtime, channel handler, bridge, or capability host.
 - The first commercial wedge is technical users supervising coding agents (OpenClaw-style today), but the architecture must not assume the user is a developer or that the agent on the other end is a coding agent.
-- The only stable contract between ClawFace and any agent runtime is the wire protocol in `docs/PROTOCOL.md`.
+- The stable contract between ClawFace and OpenClaw path B is the OpenClaw Gateway Protocol plus the ClawFace profile/overlay in `docs/PROTOCOL.md`. Legacy path A remains a ClawFace bridge/mock protocol fallback for local CLI-only development.
 
 ---
 
@@ -126,12 +127,14 @@ Current repo shape:
 - AsyncStorage-backed persistence for non-secret app state
 - WebSocket transport for paired agent communication
 - mock/dev WebSocket server for local testing
+- read-only OpenClaw Gateway discovery script for CF-025 path B protocol validation; no app transport integration yet
 - Expo Notifications integration
 - production Android cleartext traffic disabled, with explicit development opt-in
 
 Important current boundary:
 
 - ClawFace is currently a mobile client plus local mock/dev server.
+- OpenClaw Gateway path B is at discovery/profile stage only: ClawFace can probe the Gateway as an operator client, but the app has not yet switched its runtime transport from the legacy bridge/mock protocol.
 - There is no production hosted relay/control plane yet.
 - The persisted agent model has an explicit `mode: 'direct' | 'relay'` field plus optional `relayUrl`; direct mode is the implemented/local path.
 - Relay transport is not implemented yet. Relay-mode agents currently fall back to the existing WebSocket transport with a warning until the hosted relay/control plane exists.

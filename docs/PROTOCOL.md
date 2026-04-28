@@ -1,56 +1,179 @@
-# ClawFace Wire Protocol
+# ClawFace Protocol Profile
 
 Status: Draft
-Protocol version: `0.5.0`
+Profile revision: `0.6.0`
+OpenClaw Gateway Protocol: `v3` for path B
+Legacy bridge protocol: `0.5.0` for path A
 Created: 2026-04-27
-Updated: 2026-04-28
+Updated: 2026-04-29
 
-This is the canonical wire-protocol contract for the current ClawFace local/direct WebSocket flow. Product architecture, trust boundaries, hosted relay responsibilities, and approval-safety requirements live in `docs/ARCHITECTURE.md`; this document only defines endpoint behaviour, message schemas, ordering, and current protocol intent.
+This document is now a **ClawFace profile/overlay**, not a complete parallel wire protocol. ClawFace's production-shaped OpenClaw path is to connect as an `operator` role client to the OpenClaw Gateway WebSocket Protocol. OpenClaw owns the Gateway frame format, handshake, authentication, method schemas, event schemas, scope checks, idempotency requirements, and device-token lifecycle.
 
-Current implementation endpoints:
+Local OpenClaw reference: `/home/crowclaws/.npm-global/lib/node_modules/openclaw/docs/gateway/protocol.md`.
 
-- `/pair` — one-shot pairing handshake
-- `/agent` — persistent bidirectional agent control channel
-
-All messages are UTF-8 JSON objects with a required string `type` field. Unknown message types are currently ignored by the dev server/client unless otherwise noted.
-
-### Version history
-
-- `0.5.0` (this revision): renamed `AgentContext.openclawSessionId` to `agentSessionId` and `AgentContext.openclawThreadId` to `agentThreadId` so the wire protocol is vendor-neutral. The OpenClaw local bridge in `scripts/openclaw-bridge.js` now emits the neutral names; older clients/servers that read the OpenClaw-prefixed names must be updated. The persistence layer in `services/persistence.ts` includes a forward migration for previously paired agents.
-- `0.4.0`: prior version with vendor-prefixed `openclawSessionId` / `openclawThreadId` in `AgentContext`.
+Product architecture, trust boundaries, hosted relay responsibilities, and approval-safety requirements live in `docs/ARCHITECTURE.md`. Product vocabulary lives in `docs/UBIQUITOUS_LANGUAGE.md`.
 
 ---
 
-## 1. Pairing endpoint: `/pair`
+## 1. Transport paths
 
-Purpose: exchange a one-time pairing code plus client-generated key material for a session key. The session key is later used on `/agent`.
+### Path B — OpenClaw Gateway Protocol profile
 
-### Sequence
+Path B is the long-term M1 shape: ClawFace connects directly to a locally-running or self-hosted OpenClaw Gateway, defaulting to `ws://127.0.0.1:18789`, as an `operator` role client over Gateway protocol v3.
 
-```text
-Mobile client                                      Agent/dev server
-     |                                                   |
-     |  open ws://host:port/pair                         |
-     |-------------------------------------------------->| 
-     |                                                   |
-     |  { type: 'pair', code, clientKey }                 |
-     |-------------------------------------------------->| 
-     |                                                   | validate one-time code
-     |                                                   | consume code
-     |                                                   | issue session key
-     |                                                   |
-     |  { type: 'session', sessionKey }                   |
-     |<--------------------------------------------------| 
-     |                                                   |
-     |  close                                            |
-     |-------------------------------------------------->| 
-```
+ClawFace-specific responsibilities on this path:
 
-On failure, the server sends `error` and closes the socket.
+- present a mobile command surface for an Agent Operator;
+- request only the operator scopes needed for the current surface;
+- persist Gateway-issued device tokens securely in the app when pairing is implemented;
+- map Gateway sessions, topics, messages, tool events, and approvals onto ClawFace Workstreams, Threads, Agent Context, and Message models;
+- keep OpenClaw identifiers opaque; ClawFace stores and routes with full IDs or separately-provided fields and must not derive meaning by delimiter parsing;
+- normalize malformed or unsupported Gateway frames into controlled transport notices before touching app state.
 
-### Pairing payload
+OpenClaw-owned details that this document intentionally does **not** duplicate:
 
-The pairing QR/paste payload is not itself sent over WebSocket, but it bootstraps `/pair`.
+- `req` / `res` / `event` frame schemas;
+- `connect.challenge` and `connect` request/response schema;
+- device identity signature payloads and auth error detail codes;
+- method parameter/response schemas;
+- event payload schemas;
+- server-side scope enforcement;
+- device-token issuance, rotation, and revocation semantics.
+
+### Path A — legacy ClawFace bridge/mock protocol
+
+Path A remains for local development and for users running the `openclaw agent` CLI without a Gateway:
+
+- `scripts/dev-server.js` — mock ClawFace dev server;
+- `scripts/openclaw-bridge.js` — local CLI adapter that shells out to `openclaw agent`.
+
+This protocol is still the contract for the currently shipped app transport in `services/transport/websocket.ts`, but it is now a legacy fallback rather than the target OpenClaw integration. Its last documented version is `0.5.0`; the preserved details are in [Appendix A](#appendix-a--legacy-path-a-bridge-and-mock-protocol-050).
+
+---
+
+## 2. Path B Gateway profile
+
+### Connect handshake
+
+ClawFace's Gateway client must wait for `event: "connect.challenge"`, then send a Gateway `req` with `method: "connect"` and protocol range `minProtocol: 3`, `maxProtocol: 3`.
+
+Baseline connect intent:
+
+- `role`: `operator`
+- `client.id`: a ClawFace-specific client id such as `clawface-mobile` or `clawface-discover`
+- `client.mode`: OpenClaw operator/client mode, not node mode
+- `auth.token`: shared Gateway token or previously-issued device token when available
+- `device`: signed device identity, including the challenge nonce, when required by Gateway auth mode
+
+The first safe CF-025 slice includes a read-only discovery script (`scripts/openclaw-gateway-discover.js`) that validates this handshake shape without integrating app transport.
+
+### Scope set
+
+Minimum desired scopes by ClawFace surface:
+
+| ClawFace surface | Gateway scope |
+| --- | --- |
+| Presence, available methods/events, health/status, session list/previews | `operator.read` |
+| Send user turns, steer/abort where exposed in UI | `operator.write` |
+| Resolve runtime approval/handoff requests | `operator.approvals` |
+| Pair/revoke ClawFace device tokens | `operator.pairing` |
+| Gateway/runtime administration | not part of M1; avoid by default |
+
+The discovery script requests `operator.read` only. The eventual mobile transport should request the narrowest set needed for the enabled UI. `operator.admin` is not required for the M1 command surface and should not be a default.
+
+### Gateway methods ClawFace expects to use
+
+Known candidates from the local OpenClaw Gateway documentation:
+
+| ClawFace need | Candidate Gateway method(s) | Status |
+| --- | --- | --- |
+| Discover Gateway health/status | `health`, `status` | Known read-only methods; exact payloads are OpenClaw-owned. |
+| Discover connected devices/presence | `system-presence` | Known read-only method. |
+| Discover sessions | `sessions.list`, `sessions.preview`, `sessions.get` | Known read-only methods. Payload shape is not duplicated here. |
+| Subscribe to session index and messages | `sessions.subscribe`, `sessions.messages.subscribe` | Known methods; whether subscribe calls need idempotency or have side effects beyond this WS connection must be checked during app transport work. |
+| Send a user turn | `sessions.send`, possibly `chat.send` depending on selected OpenClaw surface | Not implemented in this slice. Do not guess payload schema. |
+| Steer/abort active work | `sessions.steer`, `sessions.abort`, `chat.abort` | Post-discovery until UX and method payloads are confirmed. |
+| Resolve approvals | `exec.approval.resolve`, `plugin.approval.resolve` | Requires `operator.approvals`; payloads are OpenClaw-owned. |
+| Revoke stored device token | `device.token.revoke` or related device-pairing method | Requires `operator.pairing`; exact self-revocation flow must be confirmed. |
+
+Unknowns are intentional here: this slice does not implement message send, session subscriptions, approval resolution, or token storage. The app transport PR must inspect live `hello-ok.features.methods` and OpenClaw schemas before binding payloads.
+
+### Gateway events ClawFace expects to consume
+
+Known event families from OpenClaw docs:
+
+| ClawFace model | Gateway event family |
+| --- | --- |
+| Agent reply/progress message | `session.message` and/or `chat`/`agent` events, depending on subscribed surface |
+| Tool activity chips | `session.tool` and tool-result/agent event payloads |
+| Session/workstream list updates | `sessions.changed` |
+| Presence/agent availability | `presence`, `tick`, `health` |
+| Exec approval cards | `exec.approval.requested`, `exec.approval.resolved` |
+| Plugin approval cards | `plugin.approval.requested`, `plugin.approval.resolved` |
+
+Payload shapes are not specified here because OpenClaw owns them. ClawFace's job is to normalize the subset it receives into app-domain events and surface unsupported/malformed frames as transport notices.
+
+### ClawFace overlays
+
+ClawFace adds product semantics on top of OpenClaw transport semantics:
+
+- **Workstream**: ClawFace grouping for a bounded unit of work. OpenClaw may expose sessions/topics; ClawFace should not rename the wire IDs, but may present them inside a Workstream UX.
+- **Thread**: ClawFace conversation/activity lane. A Thread may map to an OpenClaw session, topic, or separately-provided route.
+- **Agent Context**: display metadata such as repo, branch, project, inbox, CRM workspace, session id, or topic id. ClawFace displays this context; it does not use it to infer routing by parsing IDs.
+- **Handoff/Approval**: ClawFace UI cards for OpenClaw approval events. Runtime policy stays in OpenClaw.
+
+### Identifier policy
+
+OpenClaw identifiers are opaque strings. ClawFace must not split or interpret session keys, topic keys, device tokens, connection IDs, thread IDs, or request IDs using delimiters such as colon-separated segments or topic suffixes. If ClawFace needs separate route fields, it must consume separately-provided Gateway fields or preserve the full opaque identifier as one value.
+
+### Idempotency and side effects
+
+OpenClaw Gateway side-effecting methods require idempotency keys. The future app transport must send idempotency keys for methods such as message send, approval resolution, revoke/rotate, steer, abort, and any future write. This discovery slice intentionally avoids side-effecting probes.
+
+### Candidate upstream OpenClaw helpers
+
+Potential small upstream improvements for mobile UX, to validate after the first app transport spike:
+
+- a mobile-oriented pairing payload/QR helper that bundles Gateway URL, expected auth mode, device approval guidance, and TLS fingerprint when applicable;
+- documented minimal operator scope bundles for mobile read-only, mobile messaging, approvals, and pairing self-management;
+- an explicit Agent Context summary shape suitable for mobile display, if `hello-ok.snapshot`, presence, and session previews do not already expose enough metadata;
+- a push-notification bridge for approval/handoff events that carries only route metadata and no sensitive transcript content.
+
+These are upstream OpenClaw proposals, not ClawFace-specific protocol forks.
+
+---
+
+## 3. Normalization policy
+
+Inbound Gateway frames must pass through the ClawFace transport normalization seam before app/store updates.
+
+- Unknown Gateway events are ignored or surfaced as transport notices; they must not crash the app.
+- Unsupported but known event families should produce explicit unsupported notices during development.
+- Malformed known frames should become `malformed` transport events.
+- Complete messages and thread/session snapshots should be idempotent upserts keyed by opaque IDs.
+- Streaming deltas must only append to the message/session route they belong to. If OpenClaw provides sequence numbers, ClawFace should use them; otherwise duplicates are handled as delivered.
+- Approval/handoff requests are keyed by the opaque Gateway approval request id supplied by OpenClaw.
+
+---
+
+## 4. Type reference
+
+Current app transport types live in `services/transport/types.ts`. The future Gateway transport should define a narrow ClawFace-side event union and reference OpenClaw-generated/schema-owned Gateway types where available instead of copying method payloads into this repository.
+
+---
+
+## Appendix A — legacy path A bridge and mock protocol `0.5.0`
+
+The legacy ClawFace protocol uses JSON WebSocket messages with a required string `type` field.
+
+Current legacy endpoints:
+
+- `/pair` — one-shot pairing handshake;
+- `/agent` — persistent bidirectional agent control channel.
+
+### Legacy pairing `/pair`
+
+Pairing QR/paste payload:
 
 ```ts
 interface PairingPayload {
@@ -73,15 +196,7 @@ interface AgentContext {
 }
 ```
 
-Notes:
-
-- `fingerprint` identifies the intended pairing server. The server must echo it in the `/pair` `session` response; the client must reject the session if it does not match the pairing payload.
-- `secure` selects `wss` when true and `ws` otherwise.
-- `context` is optional pairing metadata for local bridges. When present, clients may display it before the first thread is created; routing authority remains the server-side session key.
-
-### Client -> server messages
-
-#### `pair`
+Client sends:
 
 ```ts
 interface PairRequest {
@@ -91,18 +206,7 @@ interface PairRequest {
 }
 ```
 
-Fields:
-
-- `code` — one-time code from the pairing payload.
-- `clientKey` — 32-byte client-generated random value, hex-encoded by the current app.
-
-Session derivation:
-
-- The current dev server derives `sessionKey = HMAC-SHA256('dev-secret', clientKey)`. Production implementations should use an environment-specific secret and equivalent server-side key derivation so the issued session is bound to the initiating client.
-
-### Server -> client messages
-
-#### `session`
+Server responds:
 
 ```ts
 interface PairSessionResponse {
@@ -113,253 +217,43 @@ interface PairSessionResponse {
 }
 ```
 
-Fields:
+The legacy dev server derives `sessionKey = HMAC-SHA256('dev-secret', clientKey)`. The OpenClaw bridge derives with its local fingerprint. The server must echo the expected `fingerprint`, and the app rejects mismatches.
 
-- `sessionKey` — bearer credential used in the `/agent` `hello` message.
-- `fingerprint` — server fingerprint echoed from the pairing payload. Clients must compare this with the payload fingerprint and abort pairing on mismatch.
-- `context` — optional local bridge metadata describing the bound repo/session target. Current fields mirror `AgentContext` above. Servers should also include the same context on created threads when they can.
+### Legacy agent channel `/agent`
 
-#### `error`
+Ordering:
 
-```ts
-interface ErrorMessage {
-  type: 'error';
-  error: string;
-}
-```
+- server may send `ready` immediately;
+- client must send `hello` before authenticated messages;
+- legacy `hello.clientVersion` is `0.5.0`;
+- `message_delta` chunks for one logical response are ordered on one socket;
+- if finalized, the final `message.id` must match the streamed `msgId`;
+- heartbeat is client-driven with `ping` / `pong`.
 
----
-
-## 2. Agent endpoint: `/agent`
-
-Purpose: persistent bidirectional channel for connection readiness, user messages, streamed agent replies, approval requests/decisions, thread creation, push-token registration, session revocation, and heartbeat.
-
-### Ordering guarantees
-
-- The server may send `ready` immediately after the socket opens.
-- The client must send `hello` before any authenticated agent-control messages (`user_message`, `approval_decision`, `create_thread`, `register_push`, or `revoke_session`).
-- `hello.clientVersion` is the protocol version. Current version is `0.5.0`.
-- `message_delta` chunks for one response are sent in order on a single WebSocket connection.
-- If a logical response is streamed with `message_delta`, a later final `message` for that same logical response must reuse the same id (`message.id === message_delta.msgId`) so clients can treat it as a finalize/upsert instead of a second message.
-- A server must not emit deltas for one logical response and then emit a separate final `message` with a different id for that same response.
-- The current protocol does not define cross-message total ordering, replay protection, or exactly-once delivery.
-- Heartbeat is client-driven: client sends `ping`, server responds with `pong`.
-
-### Client -> server messages
-
-#### `hello`
+Client messages:
 
 ```ts
-interface HelloMessage {
-  type: 'hello';
-  sessionKey: string;
-  clientVersion: '0.5.0' | string;
-}
+type LegacyClientMessage =
+  | { type: 'hello'; sessionKey: string; clientVersion: '0.5.0' | string }
+  | { type: 'user_message'; threadId: string; text: string; tempId: number }
+  | { type: 'approval_decision'; threadId: string; msgId: number; reqId: string; decision: 'approved' | 'denied' }
+  | { type: 'create_thread'; agentId: string; title?: string; clientRequestId: string }
+  | { type: 'register_push'; token: string }
+  | { type: 'revoke_session' }
+  | { type: 'ping' };
 ```
 
-Fields:
-
-- `sessionKey` — bearer credential from `/pair`.
-- `clientVersion` — app protocol version; current implementation sends `0.5.0`.
-
-#### `user_message`
+Server messages:
 
 ```ts
-interface UserMessageRequest {
-  type: 'user_message';
-  threadId: string;
-  text: string;
-  tempId: number;
-}
+type LegacyServerMessage =
+  | { type: 'ready' }
+  | { type: 'pong' }
+  | { type: 'message'; threadId: string; message: Message }
+  | { type: 'message_delta'; threadId: string; msgId: number; textDelta: string }
+  | { type: 'approval_request'; threadId: string; message: Message }
+  | { type: 'thread'; thread: Thread; clientRequestId?: string }
+  | { type: 'error'; error: string };
 ```
 
-Fields:
-
-- `threadId` — target thread.
-- `text` — user-authored message text.
-- `tempId` — client-generated temporary message id used by current streaming deltas.
-
-#### `approval_decision`
-
-```ts
-interface ApprovalDecisionRequest {
-  type: 'approval_decision';
-  threadId: string;
-  msgId: number;
-  reqId: string;
-  decision: 'approved' | 'denied';
-}
-```
-
-Fields:
-
-- `threadId` — thread containing the approval request.
-- `msgId` — approval message id being resolved.
-- `reqId` — server-generated approval request id from the matching `approval_request`; used for replay/deduplication.
-- `decision` — user decision.
-
-Servers must process at most one decision for a given `reqId`. Duplicate decisions with the same `reqId` must be ignored.
-
-#### `create_thread`
-
-```ts
-interface CreateThreadRequest {
-  type: 'create_thread';
-  agentId: string;
-  title?: string;
-  clientRequestId: string;
-}
-```
-
-Fields:
-
-- `agentId` — target paired agent.
-- `title` — optional initial title.
-- `clientRequestId` — opaque client request id echoed in the resulting `thread` response.
-
-#### `register_push`
-
-```ts
-interface RegisterPushRequest {
-  type: 'register_push';
-  token: string;
-}
-```
-
-Fields:
-
-- `token` — Expo/native push token registered for this paired agent session.
-
-#### `revoke_session`
-
-```ts
-interface RevokeSessionRequest {
-  type: 'revoke_session';
-}
-```
-
-Invalidates the session key authenticated by the earlier `hello` message. Servers must reject subsequent `hello` messages using the revoked key and should close the current socket after processing the revocation.
-
-#### `ping`
-
-```ts
-interface PingMessage {
-  type: 'ping';
-}
-```
-
-### Server -> client messages
-
-#### `ready`
-
-```ts
-interface ReadyMessage {
-  type: 'ready';
-}
-```
-
-Indicates the socket is open and the server is ready to receive `hello`.
-
-#### `pong`
-
-```ts
-interface PongMessage {
-  type: 'pong';
-}
-```
-
-Response to client `ping`.
-
-#### `message`
-
-```ts
-interface AgentMessageEvent {
-  type: 'message';
-  threadId: string;
-  message: Message;
-}
-```
-
-Fields:
-
-- `threadId` — target thread.
-- `message` — complete message object matching `data/seed.ts` `Message`.
-- If this finalizes a response previously streamed with `message_delta`, `message.id` must equal the streamed `msgId`; clients should reconcile it as an upsert/finalization of the streamed message.
-
-#### `message_delta`
-
-```ts
-interface AgentMessageDeltaEvent {
-  type: 'message_delta';
-  threadId: string;
-  msgId: number;
-  textDelta: string;
-}
-```
-
-Fields:
-
-- `threadId` — target thread.
-- `msgId` — stable message id to upsert/append text into for the duration of a streamed logical response.
-- `textDelta` — next text chunk.
-
-A streamed response may either be represented entirely by deltas, or be finalized by a `message` with the same id. A final `message` with a different id represents a different message and must not be used to finalize the streamed response.
-
-#### `approval_request`
-
-```ts
-interface ApprovalRequestEvent {
-  type: 'approval_request';
-  threadId: string;
-  message: Message;
-}
-```
-
-Fields:
-
-- `threadId` — thread containing the request.
-- `message` — approval message matching `data/seed.ts` `Message` with `role: 'approval'`, required `reqId`, optional `expiresAt`, and approval-specific fields (`tool`, `summary`, `risk`, `files`, `diff`, `status`).
-
-The server must generate a fresh, unique `message.reqId` for each approval request. Clients must echo that value in `approval_decision.reqId`.
-When present, `message.expiresAt` is a Unix timestamp in milliseconds. Clients should exclude expired pending approvals from badges/counts and should not submit decisions for expired requests.
-
-#### `thread`
-
-```ts
-interface ThreadEvent {
-  type: 'thread';
-  thread: Thread;
-  clientRequestId?: string;
-}
-```
-
-Fields:
-
-- `thread` — complete thread object matching `data/seed.ts` `Thread`.
-- `clientRequestId` — echoed when the thread was created from `create_thread`.
-
-#### `error`
-
-```ts
-interface ErrorMessage {
-  type: 'error';
-  error: string;
-}
-```
-
----
-
-## 3. Client normalization policy
-
-Inbound WebSocket messages pass through `services/transport/normalize.ts` before they update app/store state.
-
-- Unknown message types, invalid JSON, and malformed known messages are converted into controlled transport notices and ignored for state updates; they must not crash the app.
-- `message_delta` appends text to the message with `msgId` in the target thread. Deltas for an unknown `threadId` are ignored by the store rather than attached to another thread.
-- A final `message` is an idempotent upsert keyed by `message.id`. If it finalizes prior `message_delta` chunks, it replaces the partial message instead of appending duplicate final text.
-- `approval_request` handoffs are keyed by `message.reqId`. Replays update the existing approval/handoff message and should not produce duplicate pending approvals or duplicate local notifications.
-- `thread` events are idempotent upserts keyed by `thread.id`; echoed `clientRequestId` values resolve pending local create-thread requests.
-- The client does not currently implement cross-connection exactly-once delivery. Duplicate complete `message` and `thread` events are safe upserts; duplicate deltas are applied as delivered because the wire protocol does not yet include delta sequence numbers.
-
-## 4. Type reference
-
-The TypeScript definitions for app transport events and inbound server messages live in `services/transport/types.ts`.
+Legacy approvals use server-generated `message.reqId`; clients echo it in `approval_decision.reqId`. Servers process at most one decision per `reqId`.
