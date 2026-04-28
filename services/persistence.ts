@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SEED_AGENTS, SEED_THREADS, type Agent, type AgentContext, type Thread } from '@/data/seed';
 
 const STORAGE_KEY = 'clawface_state';
-const SCHEMA_VERSION = 3;
+const SCHEMA_VERSION = 4;
 
 interface PersistedState {
   version: number;
@@ -15,7 +15,7 @@ interface PersistedState {
 
 type PersistedAppState = PersistedState['state'];
 
-type PersistedAgent = Agent | (Omit<Agent, 'mode'> & { mode?: Agent['mode']; relayUrl?: string });
+type PersistedAgent = Agent | (Omit<Agent, 'mode' | 'transport'> & { mode?: Agent['mode']; transport?: Agent['transport']; relayUrl?: string });
 
 type LegacyAgentContext = AgentContext & {
   openclawSessionId?: string;
@@ -46,6 +46,9 @@ function migrateState(state: PersistedAppState, fromVersion: number): PersistedA
   }
   if (fromVersion < 3) {
     next = migrateV2ToV3(next);
+  }
+  if (fromVersion < 4) {
+    next = migrateV3ToV4(next);
   }
 
   return next;
@@ -92,6 +95,21 @@ function migrateV2ToV3(state: PersistedAppState): PersistedAppState {
       ...thread,
       context: migrateAgentContext(thread.context),
     })),
+  };
+}
+
+
+function migrateV3ToV4(state: PersistedAppState): PersistedAppState {
+  return {
+    ...state,
+    agents: state.agents.map(agent => {
+      const persisted = agent as PersistedAgent;
+      return {
+        ...persisted,
+        mode: persisted.mode ?? 'direct',
+        transport: persisted.transport ?? 'legacy-websocket',
+      } satisfies Agent;
+    }),
   };
 }
 

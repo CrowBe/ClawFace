@@ -16,15 +16,21 @@ export type { GatewayDeviceIdentity } from './openclaw-gateway';
 export { WebSocketTransport } from './websocket';
 
 import { MockTransport } from './mock';
+import { OpenClawGatewayTransport } from './openclaw-gateway';
 import { WebSocketTransport } from './websocket';
 import type { AgentTransport } from './types';
 import type { Agent } from '@/data/seed';
 
 export const mockTransport = new MockTransport();
 export const wsTransport = new WebSocketTransport();
+export const openClawGatewayTransport = new OpenClawGatewayTransport();
 
 export function resolveTransport(agent: Agent): AgentTransport {
   const mode = agent.mode ?? 'direct';
+
+  if (agent.transport === 'openclaw-gateway') {
+    return openClawGatewayTransport;
+  }
 
   if (mode === 'relay') {
     console.warn('Relay transport is not implemented yet; falling back to WebSocket transport.');
