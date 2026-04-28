@@ -559,7 +559,7 @@ Manual:
 
 > This is the executable form of the M1 milestone in `docs/PRODUCT_CONTEXT.md`. It explicitly excludes approvals and async-event routing beyond the single-thread message round-trip. Approval bridging belongs to CF-015 (Post-M1), not here.
 >
-> Two valid local validation paths exist (see "Milestone 1" preamble at top of this file): **path A** uses `scripts/openclaw-bridge.js` (legacy CLI shell-out fallback); **path B** has ClawFace pair with a local `openclaw gateway` as an `operator` role client over OpenClaw's documented Gateway WebSocket Protocol (CF-025). CF-016 may be satisfied by either, or by both. Path B is the production-transport-shaped path and is the long-term home of M1 validation; path A remains as a fallback for users running `openclaw agent` CLI without a gateway.
+> Two valid local validation paths exist (see "Milestone 1" preamble at top of this file): **path A** uses `scripts/openclaw-bridge.js` (legacy CLI shell-out fallback); **path B** has ClawFace pair with a local `openclaw gateway` as an `operator` role client over OpenClaw's documented Gateway WebSocket Protocol (CF-026). CF-016 may be satisfied by either, or by both. Path B is the production-transport-shaped path and is the long-term home of M1 validation; path A remains as a fallback for users running `openclaw agent` CLI without a gateway.
 
 #### Description
 
