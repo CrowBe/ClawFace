@@ -82,6 +82,8 @@ Minimum desired scopes by ClawFace surface:
 The discovery script requests `operator.read` only. The eventual mobile transport should request the narrowest set needed for the enabled UI. `operator.admin` is not required for the M1 command surface and should not be a default.
 
 The discovery helper defaults to `operator.read`. Set `OPENCLAW_GATEWAY_PRINT_FULL_FEATURES=1` to print the full advertised method/event list, or `OPENCLAW_GATEWAY_SCOPES=operator.read,operator.write,operator.approvals` to inspect a broader scope set without sending write probes.
+The first app pairing bridge accepts a ClawFace QR/paste payload with `transport: "openclaw-gateway"`, `host`, `port`, optional `secure`, optional display `context`, and either `token` or `sessionKey` containing the Gateway-issued/approved operator credential. The app stores that credential as an OpenClaw Gateway device token in SecureStore and marks the paired agent as `transport: "openclaw-gateway"`. This is an interim local-M1 path until OpenClaw exposes a mobile-oriented QR/pairing helper; it must not become a separate ClawFace auth protocol.
+
 
 ### Gateway methods ClawFace expects to use
 

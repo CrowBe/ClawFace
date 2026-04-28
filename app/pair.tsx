@@ -7,9 +7,9 @@ import { useRouter } from 'expo-router';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as Crypto from 'expo-crypto';
 import { useStore } from '@/store';
-import { setSessionKey } from '@/services/secureStore';
+import { setGatewayDeviceToken, setSessionKey } from '@/services/secureStore';
 import { registerForPushNotifications } from '@/services/notifications';
-import { wsTransport } from '@/services/transport';
+import { resolveTransport, wsTransport } from '@/services/transport';
 import { CloseIcon, CheckIcon } from '@/components/Icons';
 import { C } from '@/constants/colors';
 
@@ -22,11 +22,14 @@ interface AgentContext {
 }
 
 interface PairingPayload {
-  v: 1;
+  v: 1 | 2;
   host: string;
   port: number;
-  fingerprint: string;
-  code: string;
+  fingerprint?: string;
+  code?: string;
+  transport?: 'legacy-websocket' | 'openclaw-gateway';
+  token?: string;
+  sessionKey?: string;
   name?: string;
   secure?: boolean;
   context?: AgentContext;
@@ -45,11 +48,13 @@ function parsePairingPayload(raw: string): PairingPayload | null {
   try {
     const obj = JSON.parse(str) as Record<string, unknown>;
     if (
-      obj.v === 1 &&
+      (obj.v === 1 || obj.v === 2) &&
       typeof obj.host === 'string' &&
       typeof obj.port === 'number' &&
-      typeof obj.fingerprint === 'string' &&
-      typeof obj.code === 'string'
+      (
+        (obj.transport === 'openclaw-gateway' && (typeof obj.token === 'string' || typeof obj.sessionKey === 'string')) ||
+        (typeof obj.fingerprint === 'string' && typeof obj.code === 'string')
+      )
     ) {
       return obj as unknown as PairingPayload;
     }
@@ -78,7 +83,7 @@ export default function PairScreen() {
   const handlePayload = useCallback(async (raw: string) => {
     const payload = parsePairingPayload(raw);
     if (!payload) {
-      setErrorMsg('Invalid QR payload. Expected JSON with v, host, port, fingerprint, code.');
+      setErrorMsg('Invalid QR payload. Expected a ClawFace pairing JSON payload.');
       setStage('error');
       return;
     }
@@ -86,6 +91,20 @@ export default function PairScreen() {
     setStage('pairing');
 
     try {
+      if (payload.transport === 'openclaw-gateway') {
+        const token = payload.token ?? payload.sessionKey;
+        if (!token) throw new Error('Gateway pairing requires a token');
+        const name = payload.name ?? (agentName || 'OpenClaw Gateway');
+        const context = payload.context;
+        const agent = addAgent(name, payload.host, undefined, payload.port, payload.secure, context, 'openclaw-gateway');
+        await setGatewayDeviceToken(agent.id, token);
+        resolveTransport(agent).connect(agent).catch(() => {});
+        setPairedAgentId(agent.id);
+        setAgentName(name);
+        setStage('done');
+        return;
+      }
+
       const randomBytes = await Crypto.getRandomBytesAsync(32);
       // Sent during pairing so the server can bind the issued session key to this client.
       const clientKey = Array.from(randomBytes).map(b => b.toString(16).padStart(2, '0')).join('');
@@ -107,7 +126,7 @@ export default function PairScreen() {
           try {
             const msg = JSON.parse(event.data as string) as Record<string, unknown>;
             if (msg.type === 'session' && typeof msg.sessionKey === 'string') {
-              if (msg.fingerprint !== payload.fingerprint) {
+              if (payload.fingerprint && msg.fingerprint !== payload.fingerprint) {
                 reject(new Error('Fingerprint mismatch - possible rogue server'));
                 ws.close();
                 return;
