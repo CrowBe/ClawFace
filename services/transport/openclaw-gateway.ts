@@ -1,4 +1,5 @@
 import type { Agent, Thread } from '@/data/seed';
+import { deleteGatewayDeviceToken, getGatewayDeviceToken, setGatewayDeviceToken } from '@/services/secureStore';
 import { GatewayTransportEventNormalizer } from './normalize';
 import type { AgentTransport, TransportEvent, TransportListener } from './types';
 
@@ -110,6 +111,8 @@ export class OpenClawGatewayTransport implements AgentTransport {
         if (challenge) {
           try {
             const opts = this.options.get(agent.id) ?? {};
+            const storedDeviceToken = await getGatewayDeviceToken(agent.id).catch(() => null);
+            const token = opts.token ?? storedDeviceToken ?? agent.sessionKey;
             const device = await opts.device?.(challenge);
             ws.send(JSON.stringify({
               type: 'req',
@@ -131,7 +134,7 @@ export class OpenClawGatewayTransport implements AgentTransport {
                 caps: [],
                 commands: [],
                 permissions: {},
-                auth: opts.token ?? agent.sessionKey ? { token: opts.token ?? agent.sessionKey } : undefined,
+                auth: token ? { token } : undefined,
                 userAgent: `clawface-mobile/${CLIENT_VERSION}`,
                 device,
               },
@@ -146,6 +149,7 @@ export class OpenClawGatewayTransport implements AgentTransport {
         if (isObject(frame) && frame.type === 'res' && frame.id === 'connect-1') {
           clearTimeout(connectTimeout);
           if (frame.ok) {
+            await this.persistDeviceToken(agent.id, frame.payload);
             this.states.set(agent.id, 'connected');
             this.emit({ type: 'connection_changed', agentId: agent.id, online: true });
             resolve();
@@ -198,6 +202,12 @@ export class OpenClawGatewayTransport implements AgentTransport {
     });
   }
 
+
+  private async persistDeviceToken(agentId: string, helloOk: unknown): Promise<void> {
+    if (!isObject(helloOk) || !isObject(helloOk.auth) || typeof helloOk.auth.deviceToken !== 'string') return;
+    await setGatewayDeviceToken(agentId, helloOk.auth.deviceToken);
+  }
+
   private request(agentId: string, method: string, params: unknown): Promise<unknown> {
     const ws = this.sockets.get(agentId);
     if (!ws || ws.readyState !== WebSocket.OPEN) return Promise.reject(new Error('OpenClaw Gateway socket is not open'));
@@ -229,6 +239,9 @@ export class OpenClawGatewayTransport implements AgentTransport {
   }
 
   async revoke(agentId: string): Promise<void> {
+    // Exact Gateway self-revocation RPC is still being validated; clear the
+    // local credential now so reconnect cannot silently reuse it.
+    await deleteGatewayDeviceToken(agentId).catch(() => {});
     this.disconnect(agentId);
   }
 
