@@ -19,7 +19,13 @@ const CLIENT_DISPLAY_NAME = 'ClawFace Gateway Discovery';
 const CLIENT_VERSION = 'cf-025-discovery';
 const CLIENT_MODE = 'probe';
 const ROLE = 'operator';
-const SCOPES = ['operator.read'];
+const DEFAULT_SCOPES = ['operator.read'];
+const SCOPES = (process.env.OPENCLAW_GATEWAY_SCOPES || '')
+  .split(',')
+  .map(scope => scope.trim())
+  .filter(Boolean);
+if (SCOPES.length === 0) SCOPES.push(...DEFAULT_SCOPES);
+const PRINT_FULL_FEATURES = process.env.OPENCLAW_GATEWAY_PRINT_FULL_FEATURES === '1';
 const ED25519_SPKI_PREFIX = Buffer.from('302a300506032b6570032100', 'hex');
 
 /** @param {Buffer} buf */
@@ -116,8 +122,9 @@ function printHelloSummary(hello) {
     features: {
       methodCount: methods.length,
       eventCount: events.length,
-      methods: methods.slice(0, 30),
-      events: events.slice(0, 30),
+      methods: PRINT_FULL_FEATURES ? methods : methods.slice(0, 30),
+      events: PRINT_FULL_FEATURES ? events : events.slice(0, 30),
+      truncated: PRINT_FULL_FEATURES ? false : methods.length > 30 || events.length > 30,
     },
     snapshot: summarizeValue(snapshot),
     policy: hello && hello.policy,
@@ -281,7 +288,7 @@ async function main() {
   printHelloSummary(hello);
 
   const methods = new Set(Array.isArray(hello && hello.features && hello.features.methods) ? hello.features.methods : []);
-  const probes = ['health', 'status', 'system-presence', 'sessions.list'];
+  const probes = ['health', 'status', 'system-presence', 'sessions.list', 'sessions.preview'];
   console.log('[probes] read-only discovery');
   for (const method of probes) {
     if (!methods.has(method)) {
@@ -289,7 +296,8 @@ async function main() {
       continue;
     }
     try {
-      const payload = await client.request(method, {});
+      const params = method === 'sessions.preview' ? { keys: [], limit: 1, maxChars: 2000 } : {};
+      const payload = await client.request(method, params);
       console.log(`- ${method}: ok ${JSON.stringify(summarizeValue(payload))}`);
     } catch (err) {
       console.log(`- ${method}: ${err instanceof Error ? err.message : String(err)}`);
