@@ -725,7 +725,7 @@ Manual only: execute the documented instructions from a clean start and verify t
 
 ### CF-017 - Workstream-first domain module
 
-**Status:** TODO
+**Status:** DONE
 **Priority:** P0
 **Epic:** F - Architecture Deepening
 **Blocked by:** CF-014
@@ -738,12 +738,12 @@ The goal is not to build blue-sky multi-agent collaboration yet. The goal is to 
 
 #### Acceptance criteria
 
-- [ ] Add a domain module for Workstream-oriented selectors/types/helpers
-- [ ] Represent the current single-agent Thread model without pretending multi-agent Threads are implemented
-- [ ] Keep existing paired agent and thread UI behavior working
-- [ ] Move Workstream/Thread grouping logic out of screen components where practical
-- [ ] Use terms from `docs/UBIQUITOUS_LANGUAGE.md` consistently in new code and comments
-- [ ] Add or update tests for Workstream grouping and Thread lookup/routing if a test harness exists; otherwise document the manual validation path
+- [x] Add a domain module for Workstream-oriented selectors/types/helpers
+- [x] Represent the current single-agent Thread model without pretending multi-agent Threads are implemented
+- [x] Keep existing paired agent and thread UI behavior working
+- [x] Move Workstream/Thread grouping logic out of screen components where practical
+- [x] Use terms from `docs/UBIQUITOUS_LANGUAGE.md` consistently in new code and comments
+- [x] Add or update tests for Workstream grouping and Thread lookup/routing if a test harness exists; otherwise document the manual validation path
 
 #### Test plan
 
@@ -1001,7 +1001,7 @@ Manual: start from existing persisted local state where available and confirm ag
 | CF-014 | OpenClaw local bridge MVP | P0 | DONE | CF-001, CF-010 |
 | CF-015 | OpenClaw approval bridge | P0 | TODO | CF-014, CF-004, CF-018, CF-020 |
 | CF-016 | Local MVP test instructions and readiness check | P1 | TODO | CF-014, CF-015 |
-| CF-017 | Workstream-first domain module | P0 | TODO | CF-014 |
+| CF-017 | Workstream-first domain module | P0 | DONE | CF-014 |
 | CF-018 | Transport event normalization seam | P0 | TODO | CF-001, CF-014 |
 | CF-019 | Pairing workflow adapter | P1 | TODO | CF-014 |
 | CF-020 | Handoff and approval lifecycle module | P0 | TODO | CF-006, CF-018 |
