@@ -597,7 +597,7 @@ Integration:
 
 ### CF-014 - OpenClaw local bridge MVP
 
-**Status:** TODO
+**Status:** DONE
 **Priority:** P0
 **Epic:** E - OpenClaw Local MVP
 **Blocked by:** CF-001, CF-010
@@ -610,15 +610,15 @@ The MVP must make context explicit. Telegram-style global conversation state is 
 
 #### Acceptance criteria
 
-- [ ] Add an OpenClaw bridge entrypoint, separate from `scripts/dev-server.js`, that implements the ClawFace `/pair` and `/agent` WebSocket protocol in direct/local mode
-- [ ] Bridge prints a ClawFace-compatible pairing payload and/or QR source containing host, port, code, fingerprint, and protocol version
-- [ ] Pairing from the Expo app succeeds against the bridge without using the mock dev server
-- [ ] A paired agent stores enough metadata to display the active context: repo name/path, current branch if available, and OpenClaw session/thread id
-- [ ] Sending a message from ClawFace routes to the bound OpenClaw session
-- [ ] OpenClaw assistant responses stream or append back into the correct ClawFace thread
-- [ ] Async command completion events are routed to the correct ClawFace thread instead of a global Telegram/direct-chat context
-- [ ] The bridge rejects messages for unknown, revoked, or mismatched sessions
-- [ ] README documents the local bridge test flow separately from the mock dev server flow
+- [x] Add an OpenClaw bridge entrypoint, separate from `scripts/dev-server.js`, that implements the ClawFace `/pair` and `/agent` WebSocket protocol in direct/local mode
+- [x] Bridge prints a ClawFace-compatible pairing payload and/or QR source containing host, port, code, fingerprint, and protocol version
+- [x] Pairing from the Expo app succeeds against the bridge without using the mock dev server
+- [x] A paired agent stores enough metadata to display the active context: repo name/path, current branch if available, and OpenClaw session/thread id
+- [x] Sending a message from ClawFace routes to the bound OpenClaw session
+- [x] OpenClaw assistant responses stream or append back into the correct ClawFace thread
+- [x] Async command completion events are routed to the correct ClawFace thread instead of a global Telegram/direct-chat context
+- [x] The bridge rejects messages for unknown, revoked, or mismatched sessions
+- [x] README documents the local bridge test flow separately from the mock dev server flow
 
 #### Test plan
 
