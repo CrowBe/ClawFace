@@ -9,6 +9,8 @@ Related documents:
 
 - `README.md` — project overview and development setup
 - `CLAUDE.md` — coding-agent handoff notes and repo conventions
+- `docs/PRODUCT_CONTEXT.md` — canonical product vision, audience, product promises, non-goals, and milestone framing
+- `docs/UBIQUITOUS_LANGUAGE.md` — canonical product/domain terminology
 - `docs/BACKLOG.md` — executable work backlog; not a source of architectural truth
 - `docs/SCALING_AND_UNIT_ECONOMICS.md` — business model, cost drivers, quotas, and scaling considerations
 - `docs/PROTOCOL.md` — canonical wire-protocol spec
@@ -16,6 +18,8 @@ Related documents:
 
 Source-of-truth rule:
 
+- product vision, audience, product promises, non-goals, and milestone framing live in `docs/PRODUCT_CONTEXT.md`
+- product/domain terminology lives in `docs/UBIQUITOUS_LANGUAGE.md`
 - product architecture, trust boundaries, relay responsibilities, approval safety requirements, and hosted/local responsibilities live here
 - concrete WebSocket message schemas and ordering guarantees live in `docs/PROTOCOL.md`
 - agent-side harness/component internals live in `docs/AGENT_ARCHITECTURE.md`
