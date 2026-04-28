@@ -2,6 +2,7 @@
 
 Status: Draft
 Created: 2026-04-28
+Updated: 2026-04-29
 
 This document defines ClawFace's product/domain language. Use these terms in product docs, design discussions, backlog items, and user-facing copy unless there is a deliberate reason not to.
 
@@ -62,6 +63,20 @@ This document defines ClawFace's product/domain language. Use these terms in pro
 > **Dev:** "And if later we have a sales CRM agent and a research agent contributing to the same effort, they could be **Participants** in separate **Threads** under one **Workstream**?"
 >
 > **Domain expert:** "Yes. Keep the conversations separate to avoid **context collapse**, but let shared **Workstream Context** connect the effort."
+
+## OpenClaw Gateway language mapping
+
+ClawFace product language deliberately differs from some OpenClaw protocol language. Use OpenClaw terms when referring to Gateway frames/methods; use ClawFace terms in product/domain UI.
+
+| OpenClaw term | ClawFace product term | Mapping note |
+| --- | --- | --- |
+| `operator` | **Agent Operator** / ClawFace client | ClawFace connects as an OpenClaw `operator` role client. The human is the Agent Operator; the app is their mobile command surface. |
+| `session` | **Thread** or **Agent Context**, depending on UI use | A Gateway session may back a ClawFace Thread, but ClawFace must store the Gateway session id as an opaque route id rather than interpreting it as product hierarchy. |
+| `topic` / topic suffix | **Thread** route metadata | OpenClaw topic identifiers are opaque. ClawFace must not split IDs on delimiters to derive topic or session pieces. |
+| `node` | Agent runtime capability host, not ClawFace | ClawFace is not an OpenClaw node. Nodes expose capabilities; ClawFace supervises and directs work as an operator client. |
+| `device` | Paired ClawFace app install or OpenClaw client identity | In Gateway auth, a device is an identity/token holder. In ClawFace UX, describe the paired phone/app install plainly instead of making users reason about protocol devices. |
+| `deviceToken` | Stored pairing credential | Treat as a secret bearer credential owned by OpenClaw. Store securely; never display, log, or parse it. |
+| Gateway approval events | **Approval** / **Handoff** | OpenClaw owns policy and request payloads. ClawFace renders the human decision surface. |
 
 ## Flagged ambiguities
 

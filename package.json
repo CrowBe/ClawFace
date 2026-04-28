@@ -8,7 +8,8 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "dev:server": "node scripts/dev-server.js",
-    "bridge:openclaw": "node scripts/openclaw-bridge.js"
+    "bridge:openclaw": "node scripts/openclaw-bridge.js",
+    "gateway:discover": "node scripts/openclaw-gateway-discover.js"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",
