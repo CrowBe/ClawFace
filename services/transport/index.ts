@@ -11,6 +11,8 @@ export type {
 export { MockTransport } from './mock';
 export { GatewayTransportEventNormalizer, TransportEventNormalizer } from './normalize';
 export type { GatewayFrame, TransportNormalizationIssue, TransportNormalizationResult } from './normalize';
+export { OpenClawGatewayTransport } from './openclaw-gateway';
+export type { GatewayDeviceIdentity } from './openclaw-gateway';
 export { WebSocketTransport } from './websocket';
 
 import { MockTransport } from './mock';
