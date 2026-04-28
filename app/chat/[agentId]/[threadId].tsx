@@ -13,6 +13,7 @@ import { Toggle } from '@/components/Toggle';
 import { Toast } from '@/components/Toast';
 import { BackIcon, DotsIcon, SendIcon } from '@/components/Icons';
 import { C } from '@/constants/colors';
+import { formatThreadContext, getThreadRoute } from '@/domain/workstreams';
 import type { Message } from '@/data/seed';
 
 export default function ChatScreen() {
@@ -25,7 +26,8 @@ export default function ChatScreen() {
   const resolveApproval = useStore(s => s.resolveApproval);
   const sendMessage = useStore(s => s.sendMessage);
 
-  const agent = agents.find(a => a.id === agentId);
+  const route = getThreadRoute(threads, threadId);
+  const agent = agents.find(a => a.id === (route?.agentId ?? agentId));
   const thread = threads.find(t => t.id === threadId);
 
   const [menuOpen, setMenuOpen] = useState(false);
@@ -39,9 +41,7 @@ export default function ChatScreen() {
 
   if (!agent || !thread) return null;
 
-  const contextLine = thread.context || agent.context
-    ? `${(thread.context ?? agent.context)?.repoPath ?? (thread.context ?? agent.context)?.repoName ?? 'repo'} · ${(thread.context ?? agent.context)?.openclawThreadId ?? (thread.context ?? agent.context)?.openclawSessionId ?? 'OpenClaw'}`
-    : `${agent.name} · typing…`;
+  const contextLine = formatThreadContext(thread, agent);
 
   const handleSend = () => {
     if (!input.trim()) return;

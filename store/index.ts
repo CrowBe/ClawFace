@@ -4,6 +4,7 @@ import { mockTransport, wsTransport, resolveTransport } from '@/services/transpo
 import { debouncedDehydrate, clearPersistedState } from '@/services/persistence';
 import { deleteSessionKey, getSessionKey } from '@/services/secureStore';
 import { scheduleLocalApprovalNotification } from '@/services/notifications';
+import { isPendingHandoff } from '@/domain/workstreams';
 
 interface AppSettings {
   biometric: boolean;
@@ -139,9 +140,7 @@ export const useStore = create<State>((set, get) => ({
     const s = get();
     const out = new Set<string>();
     s.threads.forEach(t => {
-      t.messages.forEach(m => {
-        if (isPendingApproval(m)) out.add(t.agentId);
-      });
+      if (isPendingHandoff(t)) out.add(t.agentId);
     });
     return out;
   },

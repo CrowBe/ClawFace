@@ -8,6 +8,13 @@ import { useStore } from '@/store';
 import { Avatar } from '@/components/Avatar';
 import { BackIcon, DotsIcon, SearchIcon } from '@/components/Icons';
 import { C } from '@/constants/colors';
+import {
+  formatAgentContext,
+  getAgentThreads,
+  groupThreadsByWorkstreamFolder,
+  isPendingHandoff,
+  searchThreads,
+} from '@/domain/workstreams';
 import type { Thread } from '@/data/seed';
 
 export default function ThreadsScreen() {
@@ -23,13 +30,7 @@ export default function ThreadsScreen() {
   const [search, setSearch] = useState('');
 
   const agent = agents.find(a => a.id === agentId);
-  const rawAgentThreads = threads.filter(t => t.agentId === agentId);
-  const agentThreads = search.trim()
-    ? rawAgentThreads.filter(t =>
-        t.title.toLowerCase().includes(search.toLowerCase()) ||
-        t.preview.toLowerCase().includes(search.toLowerCase())
-      )
-    : rawAgentThreads;
+  const agentThreads = searchThreads(getAgentThreads(threads, agentId), search);
 
   const handleNewThread = useCallback(async () => {
     const { resolveTransport } = await import('@/services/transport');
@@ -42,16 +43,8 @@ export default function ThreadsScreen() {
 
   if (!agent) return null;
 
-  const folders = agentThreads.reduce<Record<string, Thread[]>>((acc, t) => {
-    const key = t.folder ?? 'General';
-    acc[key] = [...(acc[key] ?? []), t];
-    return acc;
-  }, {});
-
-  const hasPending = (t: Thread) => t.messages.some(m => m.role === 'approval' && m.status === 'pending');
-  const contextLine = agent.context
-    ? `${agent.context.repoName ?? 'repo'}${agent.context.branch ? ` · ${agent.context.branch}` : ''} · ${agent.context.openclawSessionId ?? agent.context.openclawThreadId ?? 'OpenClaw'}`
-    : agent.role;
+  const folders = groupThreadsByWorkstreamFolder(agentThreads);
+  const contextLine = formatAgentContext(agent);
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
@@ -117,7 +110,7 @@ export default function ThreadsScreen() {
                 key={t.id}
                 thread={t}
                 first={i === 0}
-                pending={hasPending(t)}
+                pending={isPendingHandoff(t)}
                 onPress={() => {
                   markThreadRead(t.id);
                   router.push(`/chat/${agentId}/${t.id}`);
@@ -136,7 +129,7 @@ export default function ThreadsScreen() {
                       key={t.id}
                       thread={t}
                       first={i === 0}
-                      pending={hasPending(t)}
+                      pending={isPendingHandoff(t)}
                       onPress={() => {
                         markThreadRead(t.id);
                         router.push(`/chat/${agentId}/${t.id}`);
