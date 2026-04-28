@@ -209,22 +209,28 @@ function handleAgentSocket(ws) {
         break;
       case 'user_message': {
         const threadId = String(msg.threadId || THREAD_ID);
+        // Single tool-chip id reused across running/done/failed so the client
+        // store's upsert-by-id resolves the chip in place. Allocating a new id
+        // on the terminal state would leave the running chip orphaned.
+        const turnChipId = Date.now();
         send(ws, {
           type: 'message',
           threadId,
-          message: { id: Date.now(), role: 'tool', name: 'openclaw_agent', arg: `${CONTEXT.repoName} · ${SESSION_ID}`, status: 'running', t: 'now' },
+          message: { id: turnChipId, role: 'tool', name: 'openclaw_agent', arg: `${CONTEXT.repoName} · ${SESSION_ID}`, status: 'running', t: 'now' },
         });
         const result = await runOpenClawTurn(String(msg.text || ''));
         if (result.usedFallback) {
           // CF-023: never emit role:'agent' on fallback — the chat thread
           // would render that as if OpenClaw replied. A failed tool chip with
-          // the adapter detail is the truthful state.
+          // the adapter detail is the truthful state. Renaming the chip to
+          // openclaw_cli_unavailable on the terminal upsert makes the failure
+          // unmistakable in the UI.
           console.log(`[openclaw] FALLBACK cli unavailable session=${SESSION_ID} bin=${OPENCLAW_BIN} detail=${result.adapterDetail}`);
           send(ws, {
             type: 'message',
             threadId,
             message: {
-              id: Date.now(),
+              id: turnChipId,
               role: 'tool',
               name: 'openclaw_cli_unavailable',
               arg: `${OPENCLAW_BIN} ${SESSION_ID}`,
@@ -238,14 +244,14 @@ function handleAgentSocket(ws) {
           send(ws, {
             type: 'message',
             threadId,
-            message: { id: Date.now(), role: 'agent', text: result.text, t: 'now' },
+            message: { id: Date.now() + 1, role: 'agent', text: result.text, t: 'now' },
           });
           setTimeout(() => {
             send(ws, {
               type: 'message',
               threadId,
               message: {
-                id: Date.now(),
+                id: turnChipId,
                 role: 'tool',
                 name: 'openclaw_agent',
                 arg: `${CONTEXT.repoName} · ${SESSION_ID}`,
