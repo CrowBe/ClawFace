@@ -48,13 +48,14 @@ Per `docs/PRODUCT_CONTEXT.md`, **Approvals are explicitly out of scope for M1.**
 | CF-018 Transport event normalization seam | DONE |
 | CF-023 Bridge CLI adapter fallback is honest and configurable | DONE |
 | CF-024 Document `OPENCLAW_SESSION_ID` and repo binding for first-run | DONE |
-| CF-025 ClawFace as an operator client of the OpenClaw Gateway Protocol (M1 path B) | TODO |
+| CF-025 Gateway Protocol profile and discovery probe | DONE |
+| CF-026 OpenClaw Gateway transport implementation (M1 path B) | TODO |
 | CF-016 M1 readiness check: boot ClawFace and connect to OpenClaw in a single thread | TODO |
 
 CF-016 has two valid local validation paths and may be satisfied by either:
 
 - **Path A — Bridge.** ClawFace ↔ `scripts/openclaw-bridge.js` ↔ `openclaw agent` CLI subprocess. Lower friction to set up, lower fidelity to the production transport. Hardened by CF-023.
-- **Path B — ClawFace as an operator client of the OpenClaw Gateway Protocol.** ClawFace pairs directly with a locally-running `openclaw gateway` (default `127.0.0.1:18789`) as an `operator` role client over OpenClaw's documented WebSocket Gateway Protocol — no bridge, no CLI subprocess, no monkey-patching. ClawFace is one more control-plane client of OpenClaw, on the same level as the OpenClaw CLI, web UI, and macOS app. Tracked by CF-025; this is the production-transport-shaped path. Verified to be feasible against `docs.openclaw.ai/gateway/protocol`.
+- **Path B — ClawFace as an operator client of the OpenClaw Gateway Protocol.** ClawFace pairs directly with a locally-running `openclaw gateway` (default `127.0.0.1:18789`) as an `operator` role client over OpenClaw's documented WebSocket Gateway Protocol — no bridge, no CLI subprocess, no monkey-patching. ClawFace is one more control-plane client of OpenClaw, on the same level as the OpenClaw CLI, web UI, and macOS app. Profiled by CF-025 and implemented by CF-026; this is the production-transport-shaped path. Verified to be feasible against `docs.openclaw.ai/gateway/protocol`.
 
 Path B is the right long-term shape because OpenClaw's existing Gateway Protocol is a superset of what `docs/PROTOCOL.md` was inventing on its own: it already owns `connect` / `req` / `res` / `event` framing, signed-challenge pairing, authentication, scopes, session routing, and event delivery. Adopting it directly turns ClawFace into a normal upstream operator client of OpenClaw and lets `docs/PROTOCOL.md` shrink to a thin profile/overlay document instead of a parallel protocol spec. Path A (the bridge) remains a legacy fallback for users running `openclaw agent` CLI without a gateway.
 
@@ -566,7 +567,7 @@ Validate the end-to-end M1 path against a real local OpenClaw on the maintainer'
 
 The scope is the smallest possible loop that satisfies `docs/PRODUCT_CONTEXT.md` "First real product milestone":
 
-- pair ClawFace with the local OpenClaw target (path A: bridge → `openclaw agent` CLI; path B: `operator` client of `openclaw gateway` Gateway WS protocol via CF-025)
+- pair ClawFace with the local OpenClaw target (path A: bridge → `openclaw agent` CLI; path B: `operator` client of `openclaw gateway` Gateway WS protocol via CF-026)
 - see Agent Context (repo, branch, agent session/thread id) on the paired Trusted Agent and on the bound Thread
 - send a user message in that Thread, receive the OpenClaw response back in the same Thread
 - confirm the response was produced by the real OpenClaw runtime — for path A, the bridge logs say a real `openclaw` CLI turn ran (not the bridge fallback adapter, see CF-023); for path B, the response came from real OpenClaw session/event surfaces (not an echo)
@@ -574,7 +575,7 @@ The scope is the smallest possible loop that satisfies `docs/PRODUCT_CONTEXT.md`
 
 #### Acceptance criteria
 
-- [ ] Run the full M1 manual test path against a real local OpenClaw via at least one of path A (bridge, hardened by CF-023) or path B (ClawFace as an operator client of the OpenClaw Gateway Protocol, CF-025). Not only the mock dev server, and not only the bridge fallback adapter.
+- [ ] Run the full M1 manual test path against a real local OpenClaw via at least one of path A (bridge, hardened by CF-023) or path B (ClawFace as an operator client of the OpenClaw Gateway Protocol, CF-026). Not only the mock dev server, and not only the bridge fallback adapter.
 - [ ] `README.md` has a "M1 local test path" section covering at minimum path A with the exact commands for starting the bridge and Expo app, in order, with required env vars (`CLAWFACE_REPO_PATH`, `OPENCLAW_BIN`, `OPENCLAW_SESSION_ID`, `OPENCLAW_THREAD_ID`, `CLAWFACE_ALLOW_CLEARTEXT`) and their defaults
 - [ ] If path B was used, `README.md` documents the path B run instructions (point ClawFace at a running `openclaw gateway`, complete the operator pairing handshake, exercise the M1 round-trip)
 - [ ] `README.md` documents what the maintainer should see at each step: pairing succeeds, paired Trusted Agent shows Agent Context derived from OpenClaw (`hello-ok.snapshot` / `presence` for path B; bridge stdout for path A), the bound Thread shows repo/session metadata, sent message produces an OpenClaw response in the same Thread, transport logs confirm the response came from real OpenClaw (no fallback / no echo)
@@ -679,37 +680,75 @@ Documentation only.
 
 ---
 
-### CF-025 - ClawFace as an operator client of the OpenClaw Gateway Protocol (M1 path B)
+### CF-025 - Gateway Protocol profile and discovery probe
 
-**Status:** TODO
+**Status:** DONE
 **Priority:** P1
 **Milestone:** M1
 **Epic:** F - OpenClaw Local MVP
 **Blocked by:** CF-001, CF-014
 
-> M1 validation path B. Connect ClawFace to a local OpenClaw gateway as an `operator` role client over OpenClaw's existing Gateway WebSocket Protocol — no bridge, no CLI subprocess, no upstream OpenClaw change required. Validates the M1 single-thread loop against the same control-plane surface that OpenClaw's CLI / web UI / macOS app already use.
-
-#### Background
-
-CF-025 replaces the earlier "monkey-patch local OpenClaw" framing with an operator-client framing. OpenClaw already documents a Gateway WebSocket Protocol for control-plane clients (`operator`) and capability providers (`node`), so ClawFace should validate whether it can use that surface directly instead of inventing or upstreaming a separate ClawFace-only transport.
-
-Keep architecture rationale in the canonical docs while implementing this issue:
-
-- `docs/ARCHITECTURE.md` should own the ClawFace ↔ OpenClaw responsibility boundary and explain why ClawFace is an operator-class mobile command surface rather than a channel handler or agent runtime.
-- `docs/PROTOCOL.md` should own the resulting protocol profile/overlay and reference OpenClaw's Gateway Protocol for OpenClaw-owned frame shapes, methods, events, and pairing semantics.
-- This backlog issue should stay executable: implement the transport, update the canonical docs, run the M1 path B validation, and record any upstream OpenClaw gaps discovered while doing that work.
+> Completed in PR #38. CF-025 is the safe discovery/profile slice for M1 path B: document ClawFace as an `operator` role client of OpenClaw Gateway Protocol, add a read-only discovery probe, and avoid app transport implementation until real Gateway method/event payload shapes are confirmed.
 
 #### Description
 
-CF-025 implements an OpenClaw Gateway Protocol transport in ClawFace's `services/transport/` (alongside or replacing the existing `services/transport/websocket.ts`) and pairs ClawFace as an `operator` role client against a local OpenClaw gateway. ClawFace becomes one more control-plane client of OpenClaw, on the same level as the OpenClaw CLI, web UI, and macOS app — but with mobile-first chat UI semantics and Agent Context overlays.
+CF-025 replaces the earlier "monkey-patch local OpenClaw" framing with an operator-client framing. OpenClaw already documents a Gateway WebSocket Protocol for control-plane clients (`operator`) and capability providers (`node`), so ClawFace should validate whether it can use that surface directly instead of inventing or upstreaming a separate ClawFace-only transport.
 
-The OpenClaw side requires no monkey-patching. CF-025's deliverables are entirely on the ClawFace side: a Gateway Protocol transport, a pairing flow that produces a device token, mapping from OpenClaw's session keys / `agent` events / approval shapes onto ClawFace's domain model (Workstream / Thread / Agent Context / `Message`), and clear documentation of what `docs/PROTOCOL.md` becomes.
+This slice updates the canonical docs and adds a read-only discovery helper. It does **not** implement `services/transport/openclaw-gateway.ts`, app pairing, token persistence, or message/event mapping.
+
+#### Acceptance criteria
+
+- [x] `docs/PROTOCOL.md` is rewritten as a ClawFace profile/overlay over OpenClaw Gateway Protocol v3.
+- [x] Legacy bridge/mock protocol is preserved as Path A fallback.
+- [x] `docs/ARCHITECTURE.md` records that ClawFace is an operator-class mobile command surface, not an OpenClaw node/runtime/channel handler/bridge.
+- [x] `docs/UBIQUITOUS_LANGUAGE.md` maps OpenClaw operator/session/topic/deviceToken language to ClawFace product terms.
+- [x] `scripts/openclaw-gateway-discover.js` performs read-only Gateway discovery without storing tokens or guessing payload schemas.
+- [x] The probe uses OpenClaw-accepted client identity (`openclaw-probe` / `probe`) while declaring ClawFace in display name/user agent, because current OpenClaw validates client ids/modes against built-in enums.
+
+#### Test plan
+
+```bash
+npx tsc --noEmit
+node -c scripts/openclaw-gateway-discover.js
+git diff --check
+rg -n "split\(|:topic:|agentSessionId|agentThreadId|sessionKey" services app docs scripts
+```
+
+Manual discovery, when a Gateway auth token is available:
+
+```bash
+OPENCLAW_GATEWAY_URL=ws://127.0.0.1:18789 \
+OPENCLAW_GATEWAY_TOKEN=*** \
+npm run gateway:discover
+```
+
+#### Follow-up
+
+CF-026 owns the app transport implementation, pairing flow, Gateway event normalization, and CF-016 path B round-trip.
+
+---
+
+### CF-026 - OpenClaw Gateway transport implementation (M1 path B)
+
+**Status:** TODO
+**Priority:** P1
+**Milestone:** M1
+**Epic:** F - OpenClaw Local MVP
+**Blocked by:** CF-025
+
+> Implement the path B app transport after CF-025 discovery/profile has captured the safe boundary and confirmed that exact Gateway method/event payload shapes must be discovered rather than guessed.
+
+#### Description
+
+CF-026 implements an OpenClaw Gateway Protocol transport in ClawFace's `services/transport/` and pairs ClawFace as an `operator` role client against a local OpenClaw gateway. ClawFace becomes one more control-plane client of OpenClaw, on the same level as the OpenClaw CLI, web UI, and macOS app — but with mobile-first chat UI semantics and Agent Context overlays.
+
+The OpenClaw side requires no monkey-patching. CF-026's deliverables are entirely on the ClawFace side: a Gateway Protocol transport, a pairing flow that produces a device token, mapping from OpenClaw's session keys / `agent` events / approval shapes onto ClawFace's domain model (Workstream / Thread / Agent Context / `Message`), and documentation updates for the concrete Gateway methods/events ClawFace uses.
 
 #### Documentation boundary
 
-CF-025 must update the canonical docs rather than turning this backlog item into the architectural source of truth:
+CF-026 must update the canonical docs rather than turning this backlog item into the architectural source of truth:
 
-- `docs/PROTOCOL.md` becomes a ClawFace profile/overlay for the OpenClaw Gateway Protocol if the implementation confirms the gateway surface is sufficient for M1 path B.
+- `docs/PROTOCOL.md` owns the ClawFace profile/overlay and should list only the concrete Gateway methods/events ClawFace actually uses.
 - `docs/ARCHITECTURE.md` records the product/runtime boundary and any deliberate divergence between ClawFace product language and OpenClaw protocol language.
 - Any OpenClaw-owned wire-format detail should be referenced, not duplicated.
 
@@ -734,31 +773,24 @@ CF-025 must update the canonical docs rather than turning this backlog item into
 - [ ] Unpair revokes the device token (via `node.pair.revoke` / equivalent operator method) and the gateway rejects further connects with the revoked token.
 - [ ] CF-016 path B is satisfied when the above round-trip works against a real local OpenClaw gateway.
 
-**`docs/PROTOCOL.md` reshape**
-
-- [ ] `docs/PROTOCOL.md` is rewritten as a profile/overlay document referencing OpenClaw's Gateway Protocol for the wire format. Any text that duplicates OpenClaw-owned protocol details is deleted or replaced with a reference.
-- [ ] The overlay enumerates: Gateway methods ClawFace uses, events ClawFace consumes, scope set, mobile UX overlays, narrow ClawFace-only extensions (if any), and the opaque identifiers ClawFace stores.
-- [ ] `docs/UBIQUITOUS_LANGUAGE.md` is updated where ClawFace's vocabulary diverges from OpenClaw's (`session` / `topic` / `node` / `operator` / `device` / `pairing` / `approval`). Cheap alignments are taken; deliberate divergences are justified inline.
-- [ ] `docs/ARCHITECTURE.md` is updated to reference OpenClaw's Gateway Protocol architecture where applicable, instead of describing ClawFace's transport in isolation.
-
 **Upstream-OpenClaw work (if any)**
 
-- [ ] An honest assessment, written into `docs/PROTOCOL.md` or a short companion doc, of which (if any) extensions ClawFace would want upstream OpenClaw to add for mobile UX (e.g. pairing QR helpers, push-notification scopes for approval requests, mobile-first Agent Context fields). Each candidate extension is described as a small upstream PR proposal, not a new protocol.
+- [ ] An honest assessment, written into `docs/PROTOCOL.md`, of which extensions ClawFace would want upstream OpenClaw to add for mobile UX. Each candidate extension is described as a small upstream PR proposal, not a new protocol.
 - [ ] The `scripts/openclaw-bridge.js` adapter remains for users running `openclaw agent` CLI without a gateway, but is documented as a legacy fallback rather than the M1 path. CF-016 path A continues to use it; CF-016 path B uses the Gateway Protocol transport directly.
 
 #### Test plan
 
 Verification (paper):
 
-1. Walk `docs/PROTOCOL.md` against `docs.openclaw.ai/gateway/protocol`. For each pair / agent / approval / session surface, confirm OpenClaw already covers it. Mark any genuinely missing surface as a candidate upstream extension.
+1. Run `npm run gateway:discover` against a local Gateway with auth and record `hello-ok.features.methods/events` in `docs/PROTOCOL.md` before app integration.
 2. Confirm identifier compatibility without delimiter parsing: ClawFace either stores the full OpenClaw session/thread key as one opaque value or consumes separately-provided opaque fields from the gateway.
 3. Confirm scope mapping: which OpenClaw operator scopes does each ClawFace UI surface need.
 
 Manual (path B run):
 
 1. Run `openclaw gateway` locally with a configured agent and at least one chat channel.
-2. Pair ClawFace with the gateway as an `operator` role client (via `auth.token` or device pairing approval, whichever the maintainer's gateway is configured for).
-3. Send a user message in one Thread; confirm the OpenClaw agent response streams back via `event:agent` and renders correctly.
+2. Pair ClawFace with the gateway as an `operator` role client.
+3. Send a user message in one Thread; confirm the OpenClaw agent response streams back via Gateway events and renders correctly.
 4. Confirm tool activity renders as live tool chips driven by OpenClaw events, not by local fallback.
 5. Unpair; confirm the device token is revoked and reconnects fail.
 
@@ -769,9 +801,7 @@ Manual (path B run):
 - `services/transport/types.ts` — types aligned with OpenClaw's `req`/`res`/`event` shapes where applicable
 - `services/secureStore.ts` — stores OpenClaw `deviceToken`
 - `app/pair.tsx` — pairing flow updated for OpenClaw connect-challenge handshake
-- `docs/PROTOCOL.md` — rewritten as a profile/overlay of OpenClaw's Gateway Protocol
-- `docs/UBIQUITOUS_LANGUAGE.md` — vocabulary alignment with OpenClaw
-- `docs/ARCHITECTURE.md` — reference OpenClaw architecture where applicable
+- `docs/PROTOCOL.md` — concrete method/event profile for ClawFace's Gateway use
 - `README.md` — path B run instructions for CF-016
 - `scripts/openclaw-bridge.js` — documented as legacy fallback (CF-016 path A); not removed
 
@@ -1081,4 +1111,5 @@ Manual: start from existing persisted local state where available and confirm ag
 | CF-022 | Persistence and migration boundary | Post-M1 | P2 | TODO | CF-017, CF-019 |
 | CF-023 | Bridge CLI adapter fallback is honest and configurable | M1 | P0 | DONE | CF-014 |
 | CF-024 | Document `OPENCLAW_SESSION_ID` and repo binding for first-run | M1 | P1 | DONE | CF-014 |
-| CF-025 | ClawFace as an operator client of the OpenClaw Gateway Protocol (M1 path B) | M1 | P1 | TODO | CF-001, CF-014 |
+| CF-025 | Gateway Protocol profile and discovery probe | M1 | P1 | DONE | CF-001, CF-014 |
+| CF-026 | OpenClaw Gateway transport implementation (M1 path B) | M1 | P1 | TODO | CF-025 |
