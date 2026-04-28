@@ -10,6 +10,12 @@ import { Drawer } from '@/components/Drawer';
 import { Toast } from '@/components/Toast';
 import { MenuIcon, PlusIcon, ChevronRightIcon } from '@/components/Icons';
 import { C } from '@/constants/colors';
+import {
+  getAgentWorkstreamSummaries,
+  getInboxThreads,
+  isPendingHandoff,
+} from '@/domain/workstreams';
+import type { Agent, Thread } from '@/data/seed';
 
 function TabBar({ tab, setTab }: { tab: string; setTab: (t: string) => void }) {
   const router = useRouter();
@@ -133,12 +139,11 @@ const tabStyles = StyleSheet.create({
 export default function AgentsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { agents, threads, toggleDrawer, setAgent, agentsWithPending, pendingCount, showDrawer } = useStore();
+  const { agents, threads, toggleDrawer, pendingCount, showDrawer } = useStore();
   const [tab, setTab] = useState('agents');
   const [inboxSeen, setInboxSeen] = useState(false);
   const [agentsView, setAgentsView] = useState<'agents' | 'inbox'>('agents');
 
-  const pendingSet = agentsWithPending();
   const asks = pendingCount();
 
   const handleViewChange = (v: 'agents' | 'inbox') => {
@@ -146,11 +151,7 @@ export default function AgentsScreen() {
     if (v === 'inbox') setInboxSeen(true);
   };
 
-  // Build inbox items from threads with pending approvals + unread
-  const inboxItems = threads.filter(t => {
-    const hasPending = t.messages.some(m => m.role === 'approval' && m.status === 'pending');
-    return hasPending || t.unread > 0;
-  });
+  const inboxItems = getInboxThreads(threads);
 
   const showToggle = !inboxSeen || asks > 0;
 
@@ -212,7 +213,7 @@ export default function AgentsScreen() {
         {agents.length === 0 ? (
           <EmptyState onPair={() => router.push('/pair')} />
         ) : agentsView === 'agents' ? (
-          <AgentList agents={agents} threads={threads} pendingSet={pendingSet} />
+          <AgentList agents={agents} threads={threads} />
         ) : (
           <InboxList items={inboxItems} agents={agents} />
         )}
@@ -244,47 +245,44 @@ function EmptyState({ onPair }: { onPair: () => void }) {
   );
 }
 
-function AgentList({ agents, threads, pendingSet }: any) {
+function AgentList({ agents, threads }: { agents: Agent[]; threads: Thread[] }) {
   const router = useRouter();
   const { setAgent } = useStore();
+  const summaries = getAgentWorkstreamSummaries(agents, threads);
 
   return (
     <View style={styles.card}>
-      {agents.map((a: any, i: number) => {
-        const agentThreads = threads.filter((t: any) => t.agentId === a.id);
-        const unread = agentThreads.reduce((s: number, t: any) => s + t.unread, 0);
-        const asking = pendingSet.has(a.id);
-
+      {summaries.map(({ agent, threadCount, unreadCount, needsHandoff }, i) => {
         return (
           <TouchableOpacity
-            key={a.id}
+            key={agent.id}
             activeOpacity={0.7}
             onPress={() => {
-              setAgent(a.id);
-              router.push(`/threads/${a.id}`);
+              setAgent(agent.id);
+              router.push(`/threads/${agent.id}`);
             }}
             style={[styles.agentRow, i > 0 && styles.rowBorder]}
           >
             <Avatar
-              agent={a}
+              agent={agent}
               size={44}
-              dot={asking ? 'ask' : a.online ? 'online' : 'offline'}
+              dot={needsHandoff ? 'ask' : agent.online ? 'online' : 'offline'}
             />
             <View style={{ flex: 1, minWidth: 0 }}>
-              <Text style={styles.agentName}>{a.name}</Text>
+              <Text style={styles.agentName}>{agent.name}</Text>
               <Text style={styles.agentSub}>
-                {asking ? 'needs approval' :
-                  unread > 0 ? `${unread} new` :
-                  `${agentThreads.length} threads`}
+                {needsHandoff ? 'needs approval' :
+                  unreadCount > 0 ? `${unreadCount} new` :
+                  `${threadCount} threads`}
               </Text>
             </View>
-            {asking ? (
+            {needsHandoff ? (
               <View style={styles.askPill}>
                 <Text style={styles.askText}>ask</Text>
               </View>
-            ) : unread > 0 ? (
+            ) : unreadCount > 0 ? (
               <View style={styles.countPill}>
-                <Text style={styles.countText}>{unread}</Text>
+                <Text style={styles.countText}>{unreadCount}</Text>
               </View>
             ) : (
               <ChevronRightIcon color={C.muted} />
@@ -308,15 +306,16 @@ function AgentList({ agents, threads, pendingSet }: any) {
   );
 }
 
-function InboxList({ items, agents }: any) {
+function InboxList({ items, agents }: { items: Thread[]; agents: Agent[] }) {
   const router = useRouter();
   const { setAgent, markThreadRead } = useStore();
 
   return (
     <View style={{ gap: 8 }}>
-      {items.map((t: any) => {
-        const agent = agents.find((a: any) => a.id === t.agentId);
-        const hasPending = t.messages.some((m: any) => m.role === 'approval' && m.status === 'pending');
+      {items.map(t => {
+        const agent = agents.find(a => a.id === t.agentId);
+        if (!agent) return null;
+        const hasPending = isPendingHandoff(t);
         return (
           <TouchableOpacity
             key={t.id}
@@ -335,7 +334,7 @@ function InboxList({ items, agents }: any) {
             <View style={{ flex: 1, minWidth: 0 }}>
               <Text style={styles.inboxTitle}>{t.title}</Text>
               <Text style={styles.inboxSub}>
-                {agent?.name.toLowerCase()} · {t.updatedMin < 60 ? `${t.updatedMin}m` : `${Math.round(t.updatedMin / 60)}h`}
+                {agent.name.toLowerCase()} · {t.updatedMin < 60 ? `${t.updatedMin}m` : `${Math.round(t.updatedMin / 60)}h`}
               </Text>
             </View>
           </TouchableOpacity>
