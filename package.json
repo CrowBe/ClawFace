@@ -12,6 +12,8 @@
     "gateway:discover": "node scripts/openclaw-gateway-discover.js"
   },
   "dependencies": {
+    "@noble/ed25519": "^3.1.0",
+    "@noble/hashes": "^2.2.0",
     "@react-native-async-storage/async-storage": "2.2.0",
     "expo": "~54.0.33",
     "expo-build-properties": "~1.0.10",

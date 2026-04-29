@@ -763,13 +763,13 @@ CF-026 must update the canonical docs rather than turning this backlog item into
 **Transport implementation**
 
 - [x] A new ClawFace transport (`services/transport/openclaw-gateway.ts`) that implements the OpenClaw Gateway Protocol `connect` handshake at protocol version 3 with `role: "operator"` and scopes `operator.read`, `operator.write`, `operator.pairing`.
-- [ ] Pairing flow that collects an OpenClaw gateway address + auth (token or device pairing approval), goes through OpenClaw's `connect.challenge` signed handshake, and stores the resulting `deviceToken` in `services/secureStore.ts`. Interim token-based Gateway pairing and SecureStore persistence are implemented; mobile device identity/signature support remains.
+- [x] Pairing flow that collects an OpenClaw gateway address + auth (token or device pairing approval), goes through OpenClaw's `connect.challenge` signed handshake, and stores the resulting `deviceToken` in `services/secureStore.ts`. Interim token-based Gateway pairing and SecureStore persistence are implemented; mobile Ed25519 device identity/signature support is wired.
 - [x] Round-trip support for `sessions.send` (user turns) and `sessions.messages.subscribe` (streamed events). Maps onto ClawFace's existing `Message` discriminated union (user / agent / tool / approval), including full-text upsert semantics for OpenClaw chat deltas.
 - [x] Session and thread identifiers are treated as opaque strings. ClawFace stores and routes with the full key; it does not split IDs on delimiters.
 - [x] Idempotency keys are sent on `sessions.send`. ClawFace generates a unique key per send call.
 - [x] `services/transport/normalize.ts` is extended with `GatewayTransportEventNormalizer` to validate OpenClaw Gateway Protocol frames (`session.message`, `chat`, `session.tool`; unsupported `agent` streams become controlled notices). Frame-shape mismatches surface as `malformed` events rather than crashing.
 - [x] Gateway approval resolution (`resolveApproval`) currently surfaces a transport notice instead of throwing. Approval bridging itself is Post-M1 (CF-015).
-- [ ] Mobile device identity/signature path for Gateway `connect.challenge`; current local-M1 path relies on a Gateway-accepted token/device token.
+- [x] Mobile device identity/signature path for Gateway `connect.challenge`; ClawFace persists a per-agent Ed25519 seed in SecureStore and signs the OpenClaw v3 challenge payload.
 - [x] Gateway device token revocation via RPC is wired through `device.token.revoke` when a connected signed device identity is available; token-only interim pairing still falls back to local credential deletion with a warning.
 
 **M1 single-thread round-trip (validates path B)**

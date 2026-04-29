@@ -1,5 +1,6 @@
 import type { Agent, Thread } from '@/data/seed';
-import { deleteGatewayDeviceToken, getGatewayDeviceToken, setGatewayDeviceToken } from '@/services/secureStore';
+import { getSignedGatewayDeviceIdentity } from '@/services/gatewayDeviceIdentity';
+import { deleteGatewayDeviceIdentitySeed, deleteGatewayDeviceToken, getGatewayDeviceToken, setGatewayDeviceToken } from '@/services/secureStore';
 import { GatewayTransportEventNormalizer } from './normalize';
 import type { AgentTransport, TransportEvent, TransportListener } from './types';
 
@@ -28,7 +29,7 @@ export interface GatewayDeviceIdentity {
 interface GatewayConnectOptions {
   token?: string;
   scopes?: string[];
-  device?: (challenge: { nonce: string; ts?: number }) => Promise<GatewayDeviceIdentity | undefined>;
+  device?: (challenge: { nonce: string; ts?: number }, auth: { token?: string; scopes: string[] }) => Promise<GatewayDeviceIdentity | undefined>;
 }
 
 const DEFAULT_GATEWAY_PORT = 18789;
@@ -151,7 +152,18 @@ export class OpenClawGatewayTransport implements AgentTransport {
             const opts = this.options.get(agent.id) ?? {};
             const storedDeviceToken = await getGatewayDeviceToken(agent.id).catch(() => null);
             const token = opts.token ?? storedDeviceToken ?? agent.sessionKey;
-            const device = await opts.device?.(challenge);
+            const scopes = opts.scopes ?? DEFAULT_SCOPES;
+            const device = await (opts.device
+              ? opts.device(challenge, { token: token ?? undefined, scopes })
+              : getSignedGatewayDeviceIdentity({
+                agentId: agent.id,
+                nonce: challenge.nonce,
+                clientId: CLIENT_ID,
+                clientMode: CLIENT_MODE,
+                role: ROLE,
+                scopes,
+                token: token ?? undefined,
+              }));
             if (device?.id) this.deviceIds.set(agent.id, device.id);
             ws.send(JSON.stringify({
               type: 'req',
@@ -169,7 +181,7 @@ export class OpenClawGatewayTransport implements AgentTransport {
                   mode: CLIENT_MODE,
                 },
                 role: ROLE,
-                scopes: opts.scopes ?? DEFAULT_SCOPES,
+                scopes,
                 caps: [],
                 commands: [],
                 permissions: {},
@@ -336,6 +348,7 @@ export class OpenClawGatewayTransport implements AgentTransport {
     }
 
     await deleteGatewayDeviceToken(agentId).catch(() => {});
+    await deleteGatewayDeviceIdentitySeed(agentId).catch(() => {});
     this.disconnect(agentId);
   }
 
