@@ -45,6 +45,57 @@ ClawFace has two paths for connecting to a local OpenClaw instance:
 - **Path B — OpenClaw Gateway Protocol (recommended).** ClawFace pairs directly with a locally-running `openclaw gateway` as an `operator` role client over OpenClaw's documented Gateway WebSocket Protocol. This is the production-transport-shaped path. See [OpenClaw Gateway](#openclaw-gateway-path-b) below.
 - **Path A — Legacy CLI bridge.** ClawFace pairs with `scripts/openclaw-bridge.js`, which shells out to the `openclaw` CLI. Lower friction to set up, lower fidelity to the production transport. See [OpenClaw local bridge](#openclaw-local-bridge-path-a) below.
 
+### M1 local test path
+
+Use this checklist from a clean start when validating CF-016. Path B is the recommended production-shaped path; Path A remains the legacy fallback for users running only the OpenClaw CLI. Do not count the mock dev server as M1 validation.
+
+**Path B — Gateway Protocol**
+
+1. Start or confirm the local OpenClaw Gateway is running on `ws://127.0.0.1:18789`.
+2. Validate Gateway auth and session surfaces before using the app:
+
+   ```bash
+   OPENCLAW_GATEWAY_URL=ws://127.0.0.1:18789 \
+   OPENCLAW_GATEWAY_TOKEN=<your-token> \
+   OPENCLAW_GATEWAY_SCOPES=operator.read,operator.write,operator.pairing \
+   OPENCLAW_GATEWAY_SEND_TEXT="Reply with one short sentence for ClawFace path B validation." \
+   npm run gateway:discover
+   ```
+
+   Expected: the probe reports `sessions.create`, `sessions.messages.subscribe`, and `sessions.send` success, then captures session-keyed `session.message`, `agent`, and/or `chat` events. The probe must not log message content.
+3. Paste a Gateway pairing payload into ClawFace with `transport: "openclaw-gateway"`, host `127.0.0.1`, port `18789`, and a Gateway token or issued device token.
+4. Expected in ClawFace: pairing succeeds only after Gateway connect/auth completes, the Trusted Agent shows Gateway-derived Agent Context where available, and recent Gateway sessions appear as Threads keyed by the full opaque Gateway session key.
+5. Send one message in a Thread. Expected: the response comes back via OpenClaw Gateway events in the same Thread, not via the mock server or bridge fallback. Tool activity, when emitted by OpenClaw, should render as real tool chips driven by `session.tool` or session-keyed `agent` tool streams.
+6. Unpair. Expected: when ClawFace has a connected signed device identity, it calls `device.token.revoke`, deletes local Gateway token/seed material, and reconnect with the revoked issued token is rejected. Token-only interim pairing falls back to local deletion with a warning.
+
+**Path A — legacy CLI bridge fallback**
+
+1. Start the bridge from this repo. Override env vars only when your local OpenClaw target differs from the defaults:
+
+   ```bash
+   CLAWFACE_REPO_PATH=$PWD \
+   OPENCLAW_BIN=openclaw \
+   OPENCLAW_SESSION_ID=agent:main:main \
+   OPENCLAW_THREAD_ID=agent:main:main \
+   OPENCLAW_AGENT_ARGS="--local --timeout 120" \
+   OPENCLAW_TURN_TIMEOUT_MS=130000 \
+   npm run bridge:openclaw
+   ```
+
+2. Start Expo in another shell with local cleartext allowed when testing Android over `ws://`:
+
+   ```bash
+   CLAWFACE_ALLOW_CLEARTEXT=true npm run android
+   ```
+
+   For iOS/simulator or Expo Go workflows, use the matching Expo command and paste the bridge payload manually if deep links are unavailable.
+3. Paste the bridge's printed JSON or `clawface://...` URL into the pairing screen.
+4. Expected in ClawFace: pairing succeeds, the Trusted Agent and bound Thread show repo/session metadata from the bridge payload, and all replies stay in the bound Thread.
+5. Send one message. Expected: bridge stdout shows `[openclaw] turn ok session=...`; the Thread shows the normal tool chip with `status: 'done'` and a real OpenClaw `agent` reply. If stdout shows `[openclaw] FALLBACK cli unavailable ...`, the Thread must show only the failed `openclaw_cli_unavailable` tool chip and no fake agent reply. Fix `OPENCLAW_BIN` / `OPENCLAW_AGENT_ARGS` before counting the run as valid.
+6. Unpair. Expected: the bridge receives `revoke_session` and rejects reuse of the old session key.
+
+Known M1 limits: approvals are intentionally Post-M1, path A binds one explicit OpenClaw session/thread per bridge instance, and path B tokenless signed pairing is implemented client-side but currently unvalidated against the local Gateway auth configuration when it reports `AUTH_TOKEN_MISSING`.
+
 ### OpenClaw Gateway (path B)
 
 ClawFace can connect directly to a running OpenClaw Gateway as an operator client. The app transport (`services/transport/openclaw-gateway.ts`) implements Gateway Protocol v3: `connect.challenge`/`connect` handling, token/device-token authentication, `sessions.send` for user turns, `sessions.messages.subscribe` for streamed events, and `sessions.create` for new threads. Mobile device signing is wired with a per-agent Ed25519 identity stored in SecureStore.
