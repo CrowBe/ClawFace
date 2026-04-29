@@ -101,6 +101,17 @@ function summarizeValue(value) {
   return { type: typeof value };
 }
 
+
+/** @param {unknown} value */
+function extractSessionKeys(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return [];
+  const sessions = Array.isArray(value.sessions) ? value.sessions : [];
+  return sessions
+    .map(session => session && typeof session === 'object' && typeof session.key === 'string' ? session.key : null)
+    .filter(Boolean)
+    .slice(0, 3);
+}
+
 /** @param {any} hello */
 function printHelloSummary(hello) {
   const features = hello && typeof hello === 'object' ? hello.features : undefined;
@@ -288,7 +299,8 @@ async function main() {
   printHelloSummary(hello);
 
   const methods = new Set(Array.isArray(hello && hello.features && hello.features.methods) ? hello.features.methods : []);
-  const probes = ['health', 'status', 'system-presence', 'sessions.list', 'sessions.preview'];
+  const probes = ['health', 'status', 'system-presence', 'sessions.list'];
+  let sessionKeys = [];
   console.log('[probes] read-only discovery');
   for (const method of probes) {
     if (!methods.has(method)) {
@@ -296,12 +308,27 @@ async function main() {
       continue;
     }
     try {
-      const params = method === 'sessions.preview' ? { keys: [], limit: 1, maxChars: 2000 } : {};
-      const payload = await client.request(method, params);
+      const payload = await client.request(method, {});
+      if (method === 'sessions.list') sessionKeys = extractSessionKeys(payload);
       console.log(`- ${method}: ok ${JSON.stringify(summarizeValue(payload))}`);
     } catch (err) {
       console.log(`- ${method}: ${err instanceof Error ? err.message : String(err)}`);
     }
+  }
+
+  if (methods.has('sessions.preview')) {
+    if (sessionKeys.length === 0) {
+      console.log('- sessions.preview: skipped (sessions.list returned no previewable keys)');
+    } else {
+      try {
+        const payload = await client.request('sessions.preview', { keys: sessionKeys, limit: 1, maxChars: 2000 });
+        console.log(`- sessions.preview: ok ${JSON.stringify(summarizeValue(payload))}`);
+      } catch (err) {
+        console.log(`- sessions.preview: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+  } else {
+    console.log('- sessions.preview: skipped (not advertised)');
   }
 
   client.ws.close(1000, 'discovery complete');

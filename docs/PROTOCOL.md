@@ -73,7 +73,7 @@ Baseline connect intent:
 - `auth.token`: shared Gateway token, bootstrap token from an OpenClaw pairing flow, or previously-issued device token. OpenClaw accepts all three through the same `connect.params.auth.token` field. No OpenClaw-side patching is required for ClawFace to authenticate.
 - `device`: signed device identity, including the challenge nonce, when required by Gateway auth mode. The v3 signature payload format is: `v3|deviceId|clientId|clientMode|role|scopes|signedAtMs|token|nonce|platform|deviceFamily`. The discovery script (`scripts/openclaw-gateway-discover.js`) demonstrates the complete Ed25519 signing flow. Mobile device signing is wired: ClawFace persists a per-agent Ed25519 seed in SecureStore and signs the Gateway v3 challenge payload while still accepting Gateway-issued token/device-token auth.
 
-The read-only discovery script (`scripts/openclaw-gateway-discover.js`) validates this handshake shape. The app transport (`services/transport/openclaw-gateway.ts`) implements challenge handling, mobile Ed25519 device signing, and token/device-token authentication with SecureStore persistence.
+The read-only discovery script (`scripts/openclaw-gateway-discover.js`) validates this handshake shape. It probes `sessions.preview` only with keys returned by `sessions.list`, avoiding invalid empty-key requests. The app transport (`services/transport/openclaw-gateway.ts`) implements challenge handling, mobile Ed25519 device signing, and token/device-token authentication with SecureStore persistence.
 
 ### Scope set
 
