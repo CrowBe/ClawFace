@@ -104,6 +104,8 @@ export class OpenClawGatewayTransport implements AgentTransport {
   private normalizers = new Map<string, GatewayTransportEventNormalizer>();
   private options = new Map<string, GatewayConnectOptions>();
   private policies = new Map<string, GatewayPolicy>();
+  private tickWatches = new Map<string, ReturnType<typeof setInterval>>();
+  private lastGatewayActivityAt = new Map<string, number>();
   private deviceIds = new Map<string, string>();
   private subscribedThreads = new Map<string, Set<string>>();
 
@@ -145,6 +147,8 @@ export class OpenClawGatewayTransport implements AgentTransport {
           this.emit({ type: 'transport_notice', level: 'warning', message: 'Ignoring non-JSON Gateway frame' });
           return;
         }
+
+        this.markGatewayActivity(agent.id);
 
         const challenge = extractChallenge(frame);
         if (challenge) {
@@ -202,6 +206,7 @@ export class OpenClawGatewayTransport implements AgentTransport {
           if (frame.ok) {
             await this.persistDeviceToken(agent.id, frame.payload);
             this.persistGatewayPolicy(agent.id, frame.payload);
+            this.startGatewayTickWatch(agent.id);
             this.states.set(agent.id, 'connected');
             this.emit({ type: 'connection_changed', agentId: agent.id, online: true });
             resolve();
@@ -242,6 +247,7 @@ export class OpenClawGatewayTransport implements AgentTransport {
 
       ws.onclose = () => {
         clearTimeout(connectTimeout);
+        this.stopGatewayTickWatch(agent.id);
         this.states.set(agent.id, 'disconnected');
         this.emit({ type: 'connection_changed', agentId: agent.id, online: false });
         const pending = this.pending.get(agent.id);
@@ -264,6 +270,45 @@ export class OpenClawGatewayTransport implements AgentTransport {
     const policy = extractGatewayPolicy(helloOk);
     if (!policy) return;
     this.policies.set(agentId, policy);
+  }
+
+  private markGatewayActivity(agentId: string): void {
+    this.lastGatewayActivityAt.set(agentId, Date.now());
+  }
+
+  private stopGatewayTickWatch(agentId: string): void {
+    const watch = this.tickWatches.get(agentId);
+    if (watch) clearInterval(watch);
+    this.tickWatches.delete(agentId);
+    this.lastGatewayActivityAt.delete(agentId);
+  }
+
+  private startGatewayTickWatch(agentId: string): void {
+    this.stopGatewayTickWatch(agentId);
+
+    const tickIntervalMs = this.policies.get(agentId)?.tickIntervalMs;
+    if (!tickIntervalMs) return;
+
+    this.lastGatewayActivityAt.set(agentId, Date.now());
+    const intervalMs = Math.max(tickIntervalMs, 1_000);
+    const timer = setInterval(() => {
+      const ws = this.sockets.get(agentId);
+      if (!ws || ws.readyState !== WebSocket.OPEN) return;
+      if ((this.pending.get(agentId)?.size ?? 0) > 0) return;
+
+      const lastActivityAt = this.lastGatewayActivityAt.get(agentId);
+      if (!lastActivityAt) return;
+
+      if (Date.now() - lastActivityAt > tickIntervalMs * 2) {
+        this.emit({
+          type: 'transport_notice',
+          level: 'warning',
+          message: `OpenClaw Gateway tick timeout after ${tickIntervalMs * 2}ms without activity`,
+        });
+        ws.close(4000, 'tick timeout');
+      }
+    }, intervalMs);
+    this.tickWatches.set(agentId, timer);
   }
 
   private validateOutboundFrame(agentId: string, frameJson: string): Error | null {
@@ -315,6 +360,7 @@ export class OpenClawGatewayTransport implements AgentTransport {
     this.pending.delete(agentId);
     this.normalizers.delete(agentId);
     this.policies.delete(agentId);
+    this.stopGatewayTickWatch(agentId);
     this.subscribedThreads.delete(agentId);
     this.agents.delete(agentId);
     this.options.delete(agentId);

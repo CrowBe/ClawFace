@@ -186,7 +186,7 @@ The Gateway returns transport policy limits in `hello-ok.payload.policy`:
 
 - `maxPayload` (bytes): maximum frame size the Gateway will accept. ClawFace stores this per connection and rejects oversized outbound frames before sending.
 - `maxBufferedBytes` (bytes): maximum buffered bytes before the Gateway closes the connection. ClawFace stores this per connection and rejects sends that would exceed the current socket buffer budget.
-- `tickIntervalMs` (ms): Gateway tick/heartbeat interval. ClawFace stores this per connection for future reconnect/keepalive tuning.
+- `tickIntervalMs` (ms): Gateway tick/heartbeat interval. ClawFace stores this per connection and uses it to watch Gateway activity; if no Gateway frame arrives for more than two tick intervals while no request is pending, ClawFace closes the stale socket and surfaces a warning notice.
 
 Oversized outbound frames and over-budget outbound buffers surface as ClawFace `transport_notice` events before sending. With Gateway diagnostics enabled, oversized inbound frames and slow outbound buffers may also emit `payload.large` events (sizes, limits, surfaces, safe reason codes — no message body or secrets) before the Gateway closes or drops the affected frame.
 
