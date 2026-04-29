@@ -68,6 +68,7 @@ export class OpenClawGatewayTransport implements AgentTransport {
   private pending = new Map<string, Map<string, PendingRequest>>();
   private normalizers = new Map<string, GatewayTransportEventNormalizer>();
   private options = new Map<string, GatewayConnectOptions>();
+  private subscribedThreads = new Map<string, Set<string>>();
 
   subscribe(listener: TransportListener): () => void {
     this.listeners.add(listener);
@@ -92,6 +93,7 @@ export class OpenClawGatewayTransport implements AgentTransport {
       this.normalizers.set(agent.id, normalizer);
       this.sockets.set(agent.id, ws);
       this.pending.set(agent.id, new Map());
+      this.subscribedThreads.set(agent.id, new Set());
 
       const connectTimeout = setTimeout(() => {
         reject(new Error('Timed out waiting for OpenClaw Gateway hello-ok'));
@@ -232,6 +234,7 @@ export class OpenClawGatewayTransport implements AgentTransport {
     this.sockets.delete(agentId);
     this.pending.delete(agentId);
     this.normalizers.delete(agentId);
+    this.subscribedThreads.delete(agentId);
     this.agents.delete(agentId);
     this.options.delete(agentId);
     this.states.set(agentId, 'disconnected');
@@ -245,7 +248,27 @@ export class OpenClawGatewayTransport implements AgentTransport {
     this.disconnect(agentId);
   }
 
+  private async ensureSubscribedToThread(agentId: string, threadId: string): Promise<void> {
+    const subscribed = this.subscribedThreads.get(agentId) ?? new Set<string>();
+    this.subscribedThreads.set(agentId, subscribed);
+    if (subscribed.has(threadId)) return;
+
+    try {
+      await this.request(agentId, 'sessions.messages.subscribe', { key: threadId });
+      subscribed.add(threadId);
+    } catch (err) {
+      this.emit({
+        type: 'transport_notice',
+        level: 'warning',
+        message: err instanceof Error
+          ? `Could not subscribe to Gateway session messages: ${err.message}`
+          : 'Could not subscribe to Gateway session messages',
+      });
+    }
+  }
+
   async sendMessage(agentId: string, threadId: string, text: string): Promise<void> {
+    await this.ensureSubscribedToThread(agentId, threadId);
     await this.request(agentId, 'sessions.send', {
       key: threadId,
       message: text,
@@ -264,6 +287,8 @@ export class OpenClawGatewayTransport implements AgentTransport {
     });
 
     if (isObject(payload) && typeof payload.key === 'string') {
+      await this.ensureSubscribedToThread(agentId, payload.key);
+
       return {
         id: payload.key,
         agentId,

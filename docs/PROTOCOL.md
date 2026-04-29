@@ -101,7 +101,7 @@ Known candidates from local OpenClaw docs and generated Gateway schema declarati
 | Resolve approvals | `exec.approval.resolve`, `plugin.approval.resolve` | Requires `operator.approvals`; payloads are OpenClaw-owned and Post-M1 unless surfaced during M1 testing. |
 | Revoke stored device token | `device.token.revoke` or related device-pairing method | Requires `operator.pairing`; exact self-revocation flow must be confirmed before app integration. |
 
-CF-026 should bind the app transport to `sessions.*` first, not `chat.*`, unless live Gateway discovery shows `sessions.send`/`sessions.messages.subscribe` are unavailable. `chat.*` remains useful for history and lower-level compatibility, but it exposes provenance/origin fields that are not part of the default mobile command surface.
+CF-026 binds the app transport to `sessions.*` first. Before sending a user turn, `OpenClawGatewayTransport` best-effort subscribes to `sessions.messages.subscribe` for the full opaque Thread/session key, then calls `sessions.send` with an idempotency key. Subscription failure is surfaced as a transport notice and does not prevent the send; live Gateway discovery may still require a `chat.*` compatibility path if `sessions.messages.subscribe` is unavailable for the local target. `chat.*` remains useful for history and lower-level compatibility, but it exposes provenance/origin fields that are not part of the default mobile command surface.
 
 ### Gateway events ClawFace expects to consume
 
