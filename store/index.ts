@@ -44,6 +44,7 @@ interface State {
   upsertApprovalRequest: (threadId: string, message: Message, replay?: boolean) => void;
   updateThreadPreview: (threadId: string, preview: string, updatedMin: number) => void;
   setAgentConnection: (agentId: string, online: boolean) => void;
+  setAgentContext: (agentId: string, context: AgentContext) => void;
   addThread: (thread: Thread) => void;
   sweepExpiredApprovals: () => void;
 }
@@ -102,6 +103,9 @@ function applyTransportEvent(store: { getState: () => State }, event: Parameters
       break;
     case 'connection_changed':
       s.setAgentConnection(event.agentId, event.online);
+      break;
+    case 'agent_context_updated':
+      s.setAgentContext(event.agentId, event.context);
       break;
     case 'transport_notice':
       break;
@@ -345,6 +349,10 @@ export const useStore = create<State>((set, get) => ({
 
   setAgentConnection: (agentId, online) => set(s => ({
     agents: s.agents.map(a => a.id === agentId ? { ...a, online } : a),
+  })),
+
+  setAgentContext: (agentId, context) => set(s => ({
+    agents: s.agents.map(a => a.id === agentId ? { ...a, context: { ...a.context, ...context } } : a),
   })),
 
   addThread: (thread) => set(s => {

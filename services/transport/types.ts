@@ -7,6 +7,7 @@ export type TransportEvent =
   | { type: 'approval_request'; threadId: string; message: Message; replay?: boolean }
   | { type: 'thread_updated'; thread: Thread; clientRequestId?: string }
   | { type: 'connection_changed'; agentId: string; online: boolean }
+  | { type: 'agent_context_updated'; agentId: string; context: AgentContext }
   | { type: 'transport_notice'; level: 'info' | 'warning' | 'error'; message: string };
 
 export type TransportEventType = TransportEvent['type'];
