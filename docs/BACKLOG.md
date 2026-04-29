@@ -763,7 +763,7 @@ CF-026 must update the canonical docs rather than turning this backlog item into
 **Transport implementation**
 
 - [x] A new ClawFace transport (`services/transport/openclaw-gateway.ts`) that implements the OpenClaw Gateway Protocol `connect` handshake at protocol version 3 with `role: "operator"` and scopes `operator.read`, `operator.write`, `operator.pairing`.
-- [x] Pairing flow that collects an OpenClaw gateway address + auth (token or device pairing approval), goes through OpenClaw's `connect.challenge` signed handshake, and stores the resulting `deviceToken` in `services/secureStore.ts`. Interim token-based Gateway pairing and SecureStore persistence are implemented; mobile Ed25519 device identity/signature support is wired.
+- [x] Pairing flow that collects an OpenClaw gateway address + auth (token or device pairing approval), goes through OpenClaw's `connect.challenge` signed handshake, and stores the resulting `deviceToken` in `services/secureStore.ts`. Interim token-based Gateway pairing, tokenless signed device-pairing attempts, and SecureStore persistence are implemented; mobile Ed25519 device identity/signature support is wired.
 - [x] Round-trip support for `sessions.send` (user turns) and `sessions.messages.subscribe` (streamed events). Maps onto ClawFace's existing `Message` discriminated union (user / agent / tool / approval), including full-text upsert semantics for OpenClaw chat deltas.
 - [x] Session discovery/binding uses `sessions.list` on Gateway connect to surface recent OpenClaw sessions as ClawFace Threads keyed by the full opaque Gateway session key.
 - [x] Session and thread identifiers are treated as opaque strings. ClawFace stores and routes with the full key; it does not split IDs on delimiters.
