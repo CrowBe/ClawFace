@@ -86,6 +86,59 @@ function extractText(value: unknown): string | undefined {
   return undefined;
 }
 
+
+function normalizeGatewayMessageRole(value: unknown): Message['role'] | null {
+  if (!isString(value)) return null;
+  if (value === 'assistant') return 'agent';
+  if (value === 'user' || value === 'tool') return value;
+  return null;
+}
+
+function normalizeGatewaySessionMessage(payload: unknown): TransportNormalizationResult {
+  if (!isObject(payload)) return malformed('session.message', 'Gateway session.message event requires an object payload');
+  if (!isString(payload.sessionKey) || !isObject(payload.message)) {
+    return malformed('session.message', 'Gateway session.message event requires sessionKey and message');
+  }
+
+  const role = normalizeGatewayMessageRole(payload.message.role);
+  if (!role) return malformed('session.message', 'Gateway session.message message requires user, assistant, or tool role');
+
+  const text = extractText(payload.message);
+  if (!text && role !== 'tool') {
+    return malformed('session.message', 'Gateway session.message requires text content');
+  }
+
+  const opaqueMessageId = isString(payload.messageId)
+    ? payload.messageId
+    : isString(payload.message.id)
+      ? payload.message.id
+      : isNumber(payload.messageSeq)
+        ? String(payload.messageSeq)
+        : `${payload.sessionKey}|${JSON.stringify(payload.message)}`;
+
+  const message: Message = role === 'tool'
+    ? {
+        id: stableNumericId(`${payload.sessionKey}|${opaqueMessageId}`),
+        role: 'tool',
+        name: isString(payload.message.name) ? payload.message.name : 'tool',
+        status: 'done',
+        result: text,
+        t: 'now',
+      }
+    : {
+        id: stableNumericId(`${payload.sessionKey}|${opaqueMessageId}`),
+        role,
+        text,
+        t: 'now',
+      };
+
+  return {
+    controls: [],
+    issues: [],
+    events: [{ type: 'message_upserted', threadId: payload.sessionKey, message }],
+  };
+}
+
 function normalizeGatewayChatEvent(payload: unknown): TransportNormalizationResult {
   if (!isObject(payload)) return malformed('chat', 'Gateway chat event requires an object payload');
   if (!isString(payload.runId) || !isString(payload.sessionKey) || !isNumber(payload.seq) || !isString(payload.state)) {
@@ -308,6 +361,8 @@ export class GatewayTransportEventNormalizer {
           return normalizeGatewayChatEvent(raw.payload);
         case 'agent':
           return normalizeGatewayAgentEvent(raw.payload);
+        case 'session.message':
+          return normalizeGatewaySessionMessage(raw.payload);
         case 'heartbeat':
         case 'tick':
         case 'presence':
