@@ -349,7 +349,14 @@ export const useStore = create<State>((set, get) => ({
 
   addThread: (thread) => set(s => {
     const exists = s.threads.find(t => t.id === thread.id);
-    if (exists) return { threads: s.threads.map(t => t.id === thread.id ? thread : t) };
+    if (exists) {
+      return {
+        threads: s.threads.map(t => t.id === thread.id
+          ? { ...t, ...thread, messages: thread.messages.length > 0 ? thread.messages : t.messages }
+          : t
+        ),
+      };
+    }
     return { threads: [...s.threads, thread] };
   }),
 
