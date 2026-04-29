@@ -78,6 +78,16 @@ OPENCLAW_GATEWAY_TOKEN=<your-token> \
 npm run gateway:discover
 ```
 
+For an opt-in local round-trip probe, provide a send text and write-capable scopes. This sends a real turn to OpenClaw and prints only summarized event shapes, not message content:
+
+```bash
+OPENCLAW_GATEWAY_URL=ws://127.0.0.1:18789 \
+OPENCLAW_GATEWAY_TOKEN=<your-token> \
+OPENCLAW_GATEWAY_SCOPES=operator.read,operator.write,operator.pairing \
+OPENCLAW_GATEWAY_SEND_TEXT="Reply with one short sentence for ClawFace path B validation." \
+npm run gateway:discover
+```
+
 Known path B limitations:
 
 - Gateway approval resolution currently surfaces a transport notice only; full approval bridging is Post-M1 (see CF-015).

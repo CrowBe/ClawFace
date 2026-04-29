@@ -793,7 +793,7 @@ CF-026 must update the canonical docs rather than turning this backlog item into
 
 Verification (paper):
 
-1. Run `npm run gateway:discover` against a local Gateway with auth and record `hello-ok.features.methods/events` in `docs/PROTOCOL.md` before app integration. Latest local probe (2026-04-29) succeeded with protocol 3, 137 advertised methods, 25 advertised events, `deviceTokenIssued: true`, policy `{ maxPayload: 26214400, maxBufferedBytes: 52428800, tickIntervalMs: 30000 }`, and read-only `sessions.list` + keyed `sessions.preview` probes.
+1. Run `npm run gateway:discover` against a local Gateway with auth and record `hello-ok.features.methods/events` in `docs/PROTOCOL.md` before app integration. For opt-in path B round-trip probing, set `OPENCLAW_GATEWAY_SEND_TEXT` and write-capable scopes; the script sends a real `sessions.send` turn and captures summarized event shapes without logging message content. Latest local probe (2026-04-30) succeeded with protocol 3, 137 advertised methods, 25 advertised events, `deviceTokenIssued: true`, policy `{ maxPayload: 26214400, maxBufferedBytes: 52428800, tickIntervalMs: 30000 }`, read-only `sessions.list` + keyed `sessions.preview`, and a write-scope `sessions.create` + `sessions.messages.subscribe` + `sessions.send` round-trip that observed session-keyed `session.message`, `agent`, and `chat` events.
 2. Confirm identifier compatibility without delimiter parsing: ClawFace either stores the full OpenClaw session/thread key as one opaque value or consumes separately-provided opaque fields from the gateway.
 3. Confirm scope mapping: which OpenClaw operator scopes does each ClawFace UI surface need.
 
