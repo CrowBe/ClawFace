@@ -59,7 +59,9 @@ CF-016 has two valid local validation paths and may be satisfied by either:
 
 Path B is the right long-term shape because OpenClaw's existing Gateway Protocol is a superset of what `docs/PROTOCOL.md` was inventing on its own: it already owns `connect` / `req` / `res` / `event` framing, signed-challenge pairing, authentication, scopes, session routing, and event delivery. Adopting it directly turns ClawFace into a normal upstream operator client of OpenClaw and lets `docs/PROTOCOL.md` shrink to a thin profile/overlay document instead of a parallel protocol spec. Path A (the bridge) remains a legacy fallback for users running `openclaw agent` CLI without a gateway.
 
-Everything else (CF-006, CF-007, CF-015, CF-019, CF-020, CF-021, CF-022) is **Post-M1**: useful, but not on the path to "boot ClawFace and connect to OpenClaw in a single thread."
+**Transport investigation (2026-04-29):** Confirmed that OpenClaw has a single production transport (Gateway WebSocket Protocol v3; legacy TCP bridge removed). No OpenClaw patching is needed for ClawFace pairing or messaging — three token-acquisition paths are already available (shared Gateway token, bootstrap token from `device-pair` plugin, direct device pairing). Post-M1 opportunities to leverage existing OpenClaw infrastructure (Bonjour/mDNS discovery, bootstrap token format, `hello-ok.policy` limits, `system-event` beacons, upstream `clawface-mobile` client ID) are tracked in CF-027.
+
+Everything else (CF-006, CF-007, CF-015, CF-019, CF-020, CF-021, CF-022, CF-027) is **Post-M1**: useful, but not on the path to "boot ClawFace and connect to OpenClaw in a single thread."
 
 ---
 
@@ -746,6 +748,8 @@ The OpenClaw side requires no monkey-patching. CF-026's deliverables are entirel
 
 **Current progress:** The core transport implementation is in place. `services/transport/openclaw-gateway.ts` implements `AgentTransport` with Gateway v3 `connect.challenge`/`connect` handling, `sessions.send` for user turns, `sessions.messages.subscribe` for thread event subscriptions, `sessions.create` for new threads, and device token persistence in SecureStore. `services/transport/normalize.ts` includes `GatewayTransportEventNormalizer` handling `session.message`, `chat`, and `session.tool` event families, while unsupported `agent` streams surface as controlled notices. `app/pair.tsx` handles interim `transport: 'openclaw-gateway'` pairing payloads and stores the supplied Gateway credential/device token. `services/transport/index.ts` routes agents with `transport: 'openclaw-gateway'` through `OpenClawGatewayTransport`. Persistence migration V3→V4 backfills the `transport` field.
 
+**Transport investigation findings (2026-04-29):** OpenClaw's Gateway WebSocket Protocol is the single production transport for all OpenClaw clients. The legacy TCP bridge has been removed. ClawFace does not need to patch or fork OpenClaw for pairing or messaging — three token-acquisition paths are already available (shared Gateway token, bootstrap token from `device-pair` plugin, direct device pairing). The current `openclaw-probe`/`probe` client identity works for M1 but a first-class `clawface-mobile` ID is a candidate upstream request for correct presence. OpenClaw also provides Bonjour/mDNS discovery and `hello-ok.policy` limits that ClawFace should consume.
+
 #### Documentation boundary
 
 CF-026 must update the canonical docs rather than turning this backlog item into the architectural source of truth:
@@ -781,7 +785,7 @@ CF-026 must update the canonical docs rather than turning this backlog item into
 **Documentation and integration**
 
 - [ ] `README.md` documents path B local test instructions: how to pair ClawFace with a running `openclaw gateway` via the `openclaw-gateway` transport type.
-- [ ] An honest assessment, written into `docs/PROTOCOL.md`, of which extensions ClawFace would want upstream OpenClaw to add for mobile UX. Each candidate extension is described as a small upstream PR proposal, not a new protocol.
+- [x] An honest assessment, written into `docs/PROTOCOL.md`, of which extensions ClawFace would want upstream OpenClaw to add for mobile UX. Each candidate extension is described as a small upstream PR proposal, not a new protocol. (Completed in transport investigation 2026-04-29: five candidate upstream helpers documented in `docs/PROTOCOL.md` §2.7.)
 - [x] The `scripts/openclaw-bridge.js` adapter remains for users running `openclaw agent` CLI without a Gateway, documented as a legacy fallback rather than the M1 path. CF-016 path A continues to use it; CF-016 path B uses the Gateway Protocol transport directly.
 
 #### Test plan
@@ -1089,6 +1093,76 @@ Manual: start from existing persisted local state where available and confirm ag
 
 ---
 
+## Epic H — Transport Investigation Follow-ups
+
+> These issues capture actionable opportunities identified by the transport investigation (2026-04-29). All are post-M1 quality-of-life improvements that leverage existing OpenClaw infrastructure without requiring upstream changes (except the client ID registration, which is a cosmetic enum addition).
+
+---
+
+### CF-027 — Transport investigation follow-ups: Bonjour discovery, bootstrap token, policy limits
+
+**Status:** TODO
+**Priority:** P2
+**Milestone:** Post-M1
+**Epic:** H — Transport Investigation Follow-ups
+**Blocked by:** CF-026
+
+#### Description
+
+The transport investigation (2026-04-29) confirmed that OpenClaw's Gateway WebSocket Protocol is the single production transport and that ClawFace can use it without any OpenClaw-side modification. Several existing OpenClaw features are available but not yet consumed by ClawFace. This umbrella issue tracks the highest-value follow-ups.
+
+#### Acceptance criteria
+
+**Bonjour/mDNS LAN discovery**
+
+- [ ] ClawFace browses `_openclaw-gw._tcp` on `local.` using a React Native mDNS library (e.g. `react-native-zeroconf`) to auto-discover local Gateways
+- [ ] Discovered Gateways are presented in the pairing UI with display name, host, port, and TLS status from TXT records
+- [ ] TXT records are treated as non-authoritative hints per OpenClaw security guidance: route using resolved SRV + A/AAAA, never allow an advertised TLS fingerprint to override a previously stored pin
+- [ ] Wide-area DNS-SD browsing on a configured domain (e.g. `openclaw.internal.`) is supported for Tailscale setups
+
+**OpenClaw bootstrap token format**
+
+- [ ] ClawFace accepts the OpenClaw base64-encoded setup code format (`{ url, bootstrapToken }`) as a pairing input alongside the existing ClawFace QR/paste payload
+- [ ] Bootstrap token is used for initial `connect.params.auth.token`; Gateway-issued `hello-ok.auth.deviceToken` is stored in SecureStore for subsequent reconnects
+- [ ] Users who already have Telegram `/pair` or `openclaw qr` set up can pair ClawFace without generating a separate ClawFace-specific payload
+
+**`hello-ok.policy` limit consumption**
+
+- [ ] Store `maxPayload` from `hello-ok.policy` and guard outbound frame size against it
+- [ ] Store `tickIntervalMs` and use it for reconnect/keepalive timing instead of hardcoded constants
+- [ ] Oversized outbound frames are rejected client-side with a transport notice before sending
+
+**`system-event` presence beacons**
+
+- [ ] ClawFace sends periodic `system-event` beacons to enrich its presence entry (device name, platform, battery level)
+- [ ] ClawFace appears in the macOS app's Instances tab and `system-presence` results when beacons are active
+
+**Upstream client ID request (cosmetic, not blocking)**
+
+- [ ] Open a small upstream PR or issue to register `clawface-mobile` as a valid `client.id` in the Gateway's built-in enum with an operator-appropriate mode
+- [ ] Once accepted, update `services/transport/openclaw-gateway.ts` to use the new client ID
+
+#### Test plan
+
+```bash
+npx tsc --noEmit
+```
+
+Manual:
+1. With a local `openclaw gateway` running, confirm Bonjour discovery surfaces the Gateway in the ClawFace pairing UI.
+2. Generate a bootstrap token via `openclaw qr` or Telegram `/pair` and confirm ClawFace accepts and connects.
+3. Confirm `hello-ok.policy.maxPayload` is stored and a synthetically large outbound frame is rejected client-side.
+4. Confirm `system-event` beacons make ClawFace visible in `openclaw nodes status` or the macOS app Instances tab.
+
+#### Files
+
+- `services/transport/openclaw-gateway.ts`
+- `app/pair.tsx`
+- `docs/PROTOCOL.md`
+- New Bonjour discovery module as appropriate
+
+---
+
 ## Issue index
 
 | Key | Title | Milestone | Priority | Status | Blocked by |
@@ -1119,3 +1193,4 @@ Manual: start from existing persisted local state where available and confirm ag
 | CF-024 | Document `OPENCLAW_SESSION_ID` and repo binding for first-run | M1 | P1 | DONE | CF-014 |
 | CF-025 | Gateway Protocol profile and discovery probe | M1 | P1 | DONE | CF-001, CF-014 |
 | CF-026 | OpenClaw Gateway transport implementation (M1 path B) | M1 | P1 | IN_PROGRESS | CF-025 |
+|| CF-027 | Transport investigation follow-ups: Bonjour discovery, bootstrap token, policy limits | Post-M1 | P2 | TODO | CF-026 |
