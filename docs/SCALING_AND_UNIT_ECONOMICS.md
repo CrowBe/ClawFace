@@ -2,7 +2,8 @@
 
 Status: Draft
 Created: 2026-04-27
-Updated: 2026-04-28
+Updated: 2026-04-29
+Play Store and monetisation analysis: 2026-04-29
 
 This document covers ClawFace's business model, cost drivers, quotas, abuse posture, and scaling considerations.
 
@@ -107,6 +108,46 @@ Potential cost traps:
 6. **App-store monetisation constraints**
    - if paid features are sold inside the app, Apple/Google policy may matter
    - safest path is account/subscription management on web, with the app consuming existing entitlements
+   - see §3.1 for current Google Play fee structure and recommended billing strategy
+
+### 3.1 Google Play Fee Structure (March 2026)
+
+Google Play announced a major fee overhaul on March 4, 2026. Public reporting says the first regional rollout starts in 2026, with details varying by market and program. Re-check the current Play Console policy before launch. References: [Google Play service fees](https://support.google.com/googleplay/android-developer/answer/112622), [9to5Google summary of the March 2026 proposal](https://9to5google.com/2026/03/04/google-vs-epic-games-android-app-stores-lower-fees/).
+
+New fee rates for transactions on new installs:
+
+| Transaction type | Standard | Apps Experience Program | First $1M earnings |
+| --- | --- | --- | --- |
+| Non-recurring (in-app or external web link) | 20% + billing fee* | 15% + billing fee* | 10% + billing fee* |
+| Recurring subscriptions | 10% + billing fee* | 10% + billing fee* | 10% + billing fee* |
+
+*Billing fee = 5% in US/UK/EEA if using Google Play Billing. Not applicable for external web link transactions.
+
+For existing installs, non-recurring rates are 5% higher. Subscription rates remain 10%.
+
+Key takeaway: subscriptions through Google Play Billing appear to be moving toward a lower effective rate than the old 30% default in many markets, but the exact fee depends on region, install cohort, billing option, and program eligibility.
+
+### Recommended billing strategy: web-only billing
+
+ClawFace's target audience (technical users, agent operators) expects to buy developer tools on websites, not through app-store IAP. Recommended approach:
+
+1. **All subscription purchases happen on a web billing portal** (Stripe or similar, ~2.9% + $0.30 per transaction).
+2. The app checks entitlements via API — "is this account Pro/Team?" — and unlocks features accordingly.
+3. The app itself is a **free download** on the Play Store. No in-app purchase flow is triggered.
+4. The app does not link to web billing from inside the app. Users find billing through the marketing website, onboarding emails, or their account dashboard on web.
+
+This is intended to keep billing outside the Play-distributed app, but do not treat it as policy-free. Before launch, validate the current Google Play Payments policy for digital services, entitlement consumption, account creation, and whether any in-app links or calls to action are allowed.
+
+Alternative: if in-app purchase convenience is later desired, the newer lower subscription/service-fee structure may be reasonable. This adds Play Billing Library integration complexity and must be evaluated against the current regional fee table.
+
+### App-store-aware entitlement design
+
+The app should consume entitlements from a web-owned billing system:
+
+- Account/subscription truth lives on the web (Stripe customer portal, account dashboard).
+- The mobile app reads entitlement state from the ClawFace API at launch and on-demand.
+- No subscription management UI or purchase CTA in the app until current Play policy confirms what is allowed.
+- This keeps billing logic out of the mobile codebase and reduces app-store policy risk, but final compliance must be checked before submission.
 
 ---
 
@@ -238,7 +279,11 @@ The strongest commercial story is:
 1. Define free/pro/team limits before implementing hosted relay.
 2. Decide whether hosted relay is paid-only or has a constrained free trial.
 3. Set initial retention defaults for approval/event metadata.
-4. Decide where subscription management lives; default recommendation is web-owned billing with app-consumed entitlements.
+4. ~~Decide where subscription management lives; default recommendation is web-owned billing with app-consumed entitlements.~~ Decision captured: web-owned billing (Stripe) with app-consumed entitlements. See §3.1.
 5. Model idle WebSocket connection cost before promising always-on relay.
 6. Model node-per-user/workspace relay costs separately from shared relay costs.
 7. Keep transcript/content sync out of scope until the encryption and pricing model are explicit.
+8. Build web billing portal (Stripe) for Pro/Team subscriptions before Play Store launch.
+9. Host Privacy Policy at a public URL (draft at `docs/PRIVACY_POLICY.md`).
+10. Complete Google Play Store listing: Data Safety form, content rating, store listing assets.
+11. Implement E2E envelope encryption for relay-mode payloads (architecture in `docs/ARCHITECTURE.md` §5) before launching hosted relay as a paid feature.
