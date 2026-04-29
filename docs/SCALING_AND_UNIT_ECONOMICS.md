@@ -110,45 +110,7 @@ Potential cost traps:
    - safest path is account/subscription management on web, with the app consuming existing entitlements
    - see §3.1 for current Google Play fee structure and recommended billing strategy
 
----
-
-## 4. Suggested Quotas
-
-These are starting assumptions, not final pricing.
-
-### Free
-
-- direct/local pairing by default
-- optional very limited hosted relay trial if desired
-- 1-2 paired agents
-- low notification volume
-- no durable hosted transcript storage
-- short approval/event metadata retention if hosted relay is used
-
-### Pro
-
-- 5-10 paired agents
-- multiple mobile devices
-- hosted relay access
-- push notifications
-- bounded approval/event history retention
-- reasonable message/control traffic limits
-- priority reconnect/resume behaviour if relay capacity is constrained
-
-### Team
-
-- pooled agent/device limits
-- per-seat or per-workspace pricing ("workspace" here means a billing/tenancy scope, not a product-domain Workstream)
-- audit retention by plan
-- admin revocation
-- policy controls
-- optional SSO only when demand justifies the maintenance cost
-
-The key is to make expensive behaviours explicit: always-on relay, long retention, audit logs, and large payload sync.
-
----
-
-## 3.1 Google Play Fee Structure (March 2026)
+### 3.1 Google Play Fee Structure (March 2026)
 
 Google Play announced a major fee overhaul on March 4, 2026, rolling out June 30, 2026 for US/UK/EEA.
 
@@ -186,6 +148,42 @@ The app should consume entitlements from a web-owned billing system:
 - The mobile app reads entitlement state from the ClawFace API at launch and on-demand.
 - No subscription management UI in the app beyond a link to the web portal.
 - This avoids Apple/Google policy friction and keeps billing logic out of the mobile codebase.
+
+---
+
+## 4. Suggested Quotas
+
+These are starting assumptions, not final pricing.
+
+### Free
+
+- direct/local pairing by default
+- optional very limited hosted relay trial if desired
+- 1-2 paired agents
+- low notification volume
+- no durable hosted transcript storage
+- short approval/event metadata retention if hosted relay is used
+
+### Pro
+
+- 5-10 paired agents
+- multiple mobile devices
+- hosted relay access
+- push notifications
+- bounded approval/event history retention
+- reasonable message/control traffic limits
+- priority reconnect/resume behaviour if relay capacity is constrained
+
+### Team
+
+- pooled agent/device limits
+- per-seat or per-workspace pricing ("workspace" here means a billing/tenancy scope, not a product-domain Workstream)
+- audit retention by plan
+- admin revocation
+- policy controls
+- optional SSO only when demand justifies the maintenance cost
+
+The key is to make expensive behaviours explicit: always-on relay, long retention, audit logs, and large payload sync.
 
 ---
 
