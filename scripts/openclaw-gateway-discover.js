@@ -179,13 +179,13 @@ function printHelloSummary(hello) {
   }, null, 2));
 }
 
-function createGatewayClient() {
+function createGatewayClient(options = {}) {
   const ws = new WebSocket(GATEWAY_URL);
   const pending = new Map();
   const eventListeners = new Set();
   let helloOk = null;
   let challengeSeen = false;
-  const device = createEphemeralDeviceIdentity();
+  const device = options.device || createEphemeralDeviceIdentity();
   const platform = process.platform || os.platform();
   const deviceFamily = `node-${platform}`;
 
@@ -226,7 +226,7 @@ function createGatewayClient() {
           role: ROLE,
           scopes: SCOPES,
           signedAtMs,
-          token: GATEWAY_TOKEN || null,
+          token: options.token || GATEWAY_TOKEN || null,
           nonce,
           platform,
           deviceFamily,
@@ -248,7 +248,7 @@ function createGatewayClient() {
           caps: [],
           commands: [],
           permissions: {},
-          auth: GATEWAY_TOKEN ? { token: GATEWAY_TOKEN } : undefined,
+          auth: options.token || GATEWAY_TOKEN ? { token: options.token || GATEWAY_TOKEN } : undefined,
           locale: process.env.LANG || 'en-US',
           userAgent: `clawface-gateway-discover/${CLIENT_VERSION}`,
           device: {
@@ -379,11 +379,31 @@ async function main() {
     if (!methods.has('device.token.revoke')) {
       console.log('- device.token.revoke: skipped (not advertised)');
     } else {
+      const issuedDeviceToken = hello && typeof hello === 'object' && hello.auth && typeof hello.auth === 'object' && typeof hello.auth.deviceToken === 'string'
+        ? hello.auth.deviceToken
+        : '';
       try {
         await client.request('device.token.revoke', { deviceId: client.device.deviceId, role: ROLE });
         console.log('- device.token.revoke: ok');
+
+        if (issuedDeviceToken) {
+          client.ws.close(1000, 'revocation reconnect check');
+          try {
+            const reconnectClient = createGatewayClient({ token: issuedDeviceToken, device: client.device });
+            await reconnectClient.connectPromise;
+            reconnectClient.ws.close(1008, 'revoked token unexpectedly connected');
+            throw new Error('revoked device token unexpectedly connected');
+          } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            if (/unexpectedly connected/.test(message)) throw err;
+            console.log('- device.token.revoke reconnect check: rejected revoked device token');
+          }
+        } else {
+          console.log('- device.token.revoke reconnect check: skipped (hello-ok did not include a device token)');
+        }
       } catch (err) {
         console.log(`- device.token.revoke: ${err instanceof Error ? err.message : String(err)}`);
+        throw err;
       }
     }
   }
