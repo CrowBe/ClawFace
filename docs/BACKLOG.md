@@ -792,7 +792,7 @@ CF-026 must update the canonical docs rather than turning this backlog item into
 
 Verification (paper):
 
-1. Run `npm run gateway:discover` against a local Gateway with auth and record `hello-ok.features.methods/events` in `docs/PROTOCOL.md` before app integration.
+1. Run `npm run gateway:discover` against a local Gateway with auth and record `hello-ok.features.methods/events` in `docs/PROTOCOL.md` before app integration. Latest local probe (2026-04-29) succeeded with protocol 3, 137 advertised methods, 25 advertised events, `deviceTokenIssued: true`, policy `{ maxPayload: 26214400, maxBufferedBytes: 52428800, tickIntervalMs: 30000 }`, and read-only `sessions.list` + keyed `sessions.preview` probes.
 2. Confirm identifier compatibility without delimiter parsing: ClawFace either stores the full OpenClaw session/thread key as one opaque value or consumes separately-provided opaque fields from the gateway.
 3. Confirm scope mapping: which OpenClaw operator scopes does each ClawFace UI surface need.
 
