@@ -1,4 +1,4 @@
-import type { Agent, Thread } from '@/data/seed';
+import type { Agent, AgentContext, Thread } from '@/data/seed';
 import { getSignedGatewayDeviceIdentity } from '@/services/gatewayDeviceIdentity';
 import { deleteGatewayDeviceIdentitySeed, deleteGatewayDeviceToken, getGatewayDeviceToken, setGatewayDeviceToken } from '@/services/secureStore';
 import { GatewayTransportEventNormalizer } from './normalize';
@@ -138,6 +138,27 @@ function extractSessionThreads(agentId: string, payload: unknown): Thread[] {
     .filter((thread): thread is Thread => thread !== null);
 }
 
+function extractGatewayAgentContext(helloOk: unknown): AgentContext | null {
+  if (!isObject(helloOk) || !isObject(helloOk.snapshot)) return null;
+
+  const snapshot = helloOk.snapshot;
+  const sessionDefaults = isObject(snapshot.sessionDefaults) ? snapshot.sessionDefaults : null;
+  const mainSessionKey = readString(sessionDefaults?.mainSessionKey);
+  const defaultAgentId = readString(sessionDefaults?.defaultAgentId);
+
+  const presence = Array.isArray(snapshot.presence)
+    ? snapshot.presence.find(entry => isObject(entry) && entry.reason === 'self')
+    : null;
+  const host = isObject(presence) ? readString(presence.host) : undefined;
+
+  const context: AgentContext = {
+    repoName: host ?? 'OpenClaw Gateway',
+    agentSessionId: mainSessionKey ?? defaultAgentId,
+  };
+
+  return context.repoName || context.agentSessionId ? context : null;
+}
+
 export class OpenClawGatewayTransport implements AgentTransport {
   private sockets = new Map<string, WebSocket>();
   private states = new Map<string, SocketState>();
@@ -249,6 +270,8 @@ export class OpenClawGatewayTransport implements AgentTransport {
           if (frame.ok) {
             await this.persistDeviceToken(agent.id, frame.payload);
             this.persistGatewayPolicy(agent.id, frame.payload);
+            const context = extractGatewayAgentContext(frame.payload);
+            if (context) this.emit({ type: 'agent_context_updated', agentId: agent.id, context });
             this.startGatewayTickWatch(agent.id);
             this.states.set(agent.id, 'connected');
             this.emit({ type: 'connection_changed', agentId: agent.id, online: true });

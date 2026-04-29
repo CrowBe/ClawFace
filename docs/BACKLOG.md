@@ -776,7 +776,7 @@ CF-026 must update the canonical docs rather than turning this backlog item into
 **M1 single-thread round-trip (validates path B)**
 
 - [ ] ClawFace pairs with a local OpenClaw gateway running on the maintainer's machine, with no use of `scripts/openclaw-bridge.js`.
-- [ ] Paired Trusted Agent shows Agent Context derived from OpenClaw's `hello-ok.snapshot` / `presence` data (repo, branch, agent session id, thread id).
+- [x] Paired Trusted Agent shows Agent Context derived from OpenClaw's `hello-ok.snapshot` / `presence` data where available (host/display name and default agent session key).
 - [ ] Sending a user message in one Thread produces an OpenClaw `agent` reply in the same Thread, streamed via `event:agent` and rendered as `message_delta` followed by a final upsert.
 - [ ] Tool activity from OpenClaw renders as ClawFace tool chips (running → done / failed), driven by OpenClaw's streamed agent events. No fake/local-fallback tool chips.
 - [ ] Approval requests from OpenClaw (if surfaced during M1 testing) render as ClawFace approval cards via the existing `approval_request` / `approval_decision` flow. Approval bridging deeper than the M1 single-thread loop remains scoped to CF-015 (Post-M1).

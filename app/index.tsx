@@ -11,6 +11,7 @@ import { Toast } from '@/components/Toast';
 import { MenuIcon, PlusIcon, ChevronRightIcon } from '@/components/Icons';
 import { C } from '@/constants/colors';
 import {
+  formatAgentContext,
   getAgentWorkstreamSummaries,
   getInboxThreads,
   isPendingHandoff,
@@ -273,7 +274,7 @@ function AgentList({ agents, threads }: { agents: Agent[]; threads: Thread[] }) 
               <Text style={styles.agentSub}>
                 {needsHandoff ? 'needs approval' :
                   unreadCount > 0 ? `${unreadCount} new` :
-                  `${threadCount} threads`}
+                  agent.context ? formatAgentContext(agent) : `${threadCount} threads`}
               </Text>
             </View>
             {needsHandoff ? (
