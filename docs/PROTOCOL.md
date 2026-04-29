@@ -61,11 +61,11 @@ Baseline connect intent:
 
 - `role`: `operator`
 - `client.id`: an OpenClaw-accepted client id. The CF-025 discovery helper uses the built-in `openclaw-probe` id until OpenClaw exposes a first-class ClawFace/mobile operator id.
-- `client.mode`: an OpenClaw-accepted non-node mode. The CF-025 discovery helper uses `probe`; the eventual app transport should use the closest upstream UI/mobile operator mode or a first-class ClawFace mode if OpenClaw adds one.
+- `client.mode`: an OpenClaw-accepted non-node mode. The discovery script and current app transport both use `probe`; this should migrate to a first-class ClawFace/mobile operator mode when OpenClaw adds one.
 - `auth.token`: shared Gateway token or previously-issued device token when available
 - `device`: signed device identity, including the challenge nonce, when required by Gateway auth mode
 
-The first safe CF-025 slice includes a read-only discovery script (`scripts/openclaw-gateway-discover.js`) that validates this handshake shape without integrating app transport.
+The read-only discovery script (`scripts/openclaw-gateway-discover.js`) validates this handshake shape. The app transport (`services/transport/openclaw-gateway.ts`) implements the full handshake with device token persistence.
 
 ### Scope set
 
@@ -79,9 +79,10 @@ Minimum desired scopes by ClawFace surface:
 | Pair/revoke ClawFace device tokens | `operator.pairing` |
 | Gateway/runtime administration | not part of M1; avoid by default |
 
-The discovery script requests `operator.read` only. The eventual mobile transport should request the narrowest set needed for the enabled UI. `operator.admin` is not required for the M1 command surface and should not be a default.
+The discovery script requests `operator.read` only. The app transport requests `operator.read,operator.write` by default. `operator.admin` is not required for the M1 command surface and should not be a default.
 
-The discovery helper defaults to `operator.read`. Set `OPENCLAW_GATEWAY_PRINT_FULL_FEATURES=1` to print the full advertised method/event list, or `OPENCLAW_GATEWAY_SCOPES=operator.read,operator.write,operator.approvals` to inspect a broader scope set without sending write probes.
+The discovery script defaults to `operator.read`. Set `OPENCLAW_GATEWAY_PRINT_FULL_FEATURES=1` to print the full advertised method/event list, or `OPENCLAW_GATEWAY_SCOPES=operator.read,operator.write,operator.approvals` to inspect a broader scope set without sending write probes. The app transport defaults to `operator.read,operator.write`.
+
 The first app pairing bridge accepts a ClawFace QR/paste payload with `transport: "openclaw-gateway"`, `host`, `port`, optional `secure`, optional display `context`, and either `token` or `sessionKey` containing the Gateway-issued/approved operator credential. The app stores that credential as an OpenClaw Gateway device token in SecureStore and marks the paired agent as `transport: "openclaw-gateway"`. This is an interim local-M1 path until OpenClaw exposes a mobile-oriented QR/pairing helper; it must not become a separate ClawFace auth protocol.
 
 
@@ -89,7 +90,7 @@ The first app pairing bridge accepts a ClawFace QR/paste payload with `transport
 
 Known candidates from local OpenClaw docs and generated Gateway schema declarations (`dist/plugin-sdk/src/gateway/protocol/schema/*.d.ts`):
 
-| ClawFace need | Candidate Gateway method(s) | Confirmed request shape for CF-026 planning |
+| ClawFace need | Candidate Gateway method(s) | Request shape |
 | --- | --- | --- |
 | Discover Gateway health/status | `health`, `status` | Read-only; payloads remain OpenClaw-owned. |
 | Discover connected devices/presence | `system-presence` | Read-only; payload remains OpenClaw-owned. |
@@ -101,13 +102,13 @@ Known candidates from local OpenClaw docs and generated Gateway schema declarati
 | Resolve approvals | `exec.approval.resolve`, `plugin.approval.resolve` | Requires `operator.approvals`; payloads are OpenClaw-owned and Post-M1 unless surfaced during M1 testing. |
 | Revoke stored device token | `device.token.revoke` or related device-pairing method | Requires `operator.pairing`; exact self-revocation flow must be confirmed before app integration. |
 
-CF-026 binds the app transport to `sessions.*` first. Before sending a user turn, `OpenClawGatewayTransport` best-effort subscribes to `sessions.messages.subscribe` for the full opaque Thread/session key, then calls `sessions.send` with an idempotency key. Subscription failure is surfaced as a transport notice and does not prevent the send; live Gateway discovery may still require a `chat.*` compatibility path if `sessions.messages.subscribe` is unavailable for the local target. `chat.*` remains useful for history and lower-level compatibility, but it exposes provenance/origin fields that are not part of the default mobile command surface.
+The app transport binds to `sessions.*` first. Before sending a user turn, `OpenClawGatewayTransport` best-effort subscribes to `sessions.messages.subscribe` for the full opaque Thread/session key, then calls `sessions.send` with an idempotency key. Subscription failure is surfaced as a transport notice and does not prevent the send. `chat.*` remains useful for history and lower-level compatibility, but it exposes provenance/origin fields that are not part of the default mobile command surface.
 
 ### Gateway events ClawFace expects to consume
 
 Known event families from OpenClaw docs and schema declarations:
 
-| ClawFace model | Gateway event family | CF-026 handling intent |
+| ClawFace model | Gateway event family | Handling |
 | --- | --- | --- |
 | Session transcript updates | `session.message` | Primary event family for a subscribed Thread/session. Current Gateway payloads carry `{ sessionKey, message, messageId?, messageSeq?, ...sessionSnapshot }`. ClawFace maps `user`, `assistant`, and `tool` transcript messages onto its existing `Message` model and derives numeric IDs by hashing the full opaque `sessionKey` plus `messageId`/`messageSeq`/message payload. |
 | Agent stream/progress | `agent` | `AgentEvent` has `{ runId, seq, stream, ts, data }`. Normalize only the `stream`/`data` shapes ClawFace understands; unknown agent stream records become controlled transport notices during development. |

@@ -49,7 +49,7 @@ Per `docs/PRODUCT_CONTEXT.md`, **Approvals are explicitly out of scope for M1.**
 | CF-023 Bridge CLI adapter fallback is honest and configurable | DONE |
 | CF-024 Document `OPENCLAW_SESSION_ID` and repo binding for first-run | DONE |
 | CF-025 Gateway Protocol profile and discovery probe | DONE |
-| CF-026 OpenClaw Gateway transport implementation (M1 path B) | TODO |
+| CF-026 OpenClaw Gateway transport implementation (M1 path B) | IN_PROGRESS |
 | CF-016 M1 readiness check: boot ClawFace and connect to OpenClaw in a single thread | TODO |
 
 CF-016 has two valid local validation paths and may be satisfied by either:
@@ -730,7 +730,7 @@ CF-026 owns the app transport implementation, pairing flow, Gateway event normal
 
 ### CF-026 - OpenClaw Gateway transport implementation (M1 path B)
 
-**Status:** TODO
+**Status:** IN_PROGRESS
 **Priority:** P1
 **Milestone:** M1
 **Epic:** F - OpenClaw Local MVP
@@ -744,6 +744,8 @@ CF-026 implements an OpenClaw Gateway Protocol transport in ClawFace's `services
 
 The OpenClaw side requires no monkey-patching. CF-026's deliverables are entirely on the ClawFace side: a Gateway Protocol transport, a pairing flow that produces a device token, mapping from OpenClaw's session keys / `agent` events / approval shapes onto ClawFace's domain model (Workstream / Thread / Agent Context / `Message`), and documentation updates for the concrete Gateway methods/events ClawFace uses.
 
+**Current progress:** The core transport implementation is in place. `services/transport/openclaw-gateway.ts` implements `AgentTransport` with Gateway v3 `connect` handshake, `sessions.send` for user turns, `sessions.messages.subscribe` for thread event subscriptions, `sessions.create` for new threads, and device token persistence in SecureStore. `services/transport/normalize.ts` includes `GatewayTransportEventNormalizer` handling `session.message`, `chat`, `agent`, and `session.tool` event families. `app/pair.tsx` handles `transport: 'openclaw-gateway'` pairing payloads and stores the device token. `services/transport/index.ts` routes agents with `transport: 'openclaw-gateway'` through `OpenClawGatewayTransport`. Persistence migration V3→V4 backfills the `transport` field.
+
 #### Documentation boundary
 
 CF-026 must update the canonical docs rather than turning this backlog item into the architectural source of truth:
@@ -756,12 +758,14 @@ CF-026 must update the canonical docs rather than turning this backlog item into
 
 **Transport implementation**
 
-- [ ] A new ClawFace transport (e.g. `services/transport/openclaw-gateway.ts`) that implements the OpenClaw Gateway Protocol `connect` handshake at protocol version 3 with `role: "operator"` and the minimum scopes ClawFace needs (`operator.read`, `operator.write`, plus `operator.approvals` if the M1 thread needs approval surfacing).
-- [ ] Pairing flow that collects an OpenClaw gateway address + auth (token or device pairing approval), goes through OpenClaw's `connect.challenge` signed handshake, and stores the resulting `deviceToken` in `services/secureStore.ts`. No bespoke ClawFace pairing handshake.
-- [ ] Round-trip support for the OpenClaw Gateway method(s) that send a user turn into an agent session (for example `chat.send`, `sessions.send`, or the current discovered equivalent), plus the streamed agent/session events returned by the gateway. Map these onto ClawFace's existing `Message` discriminated union (user / agent / tool / approval), including `message_delta` semantics where OpenClaw streams partial agent output.
-- [ ] Session and thread identifiers are treated as opaque strings. If OpenClaw exposes a composite session key, ClawFace stores and routes with the full key or with separately-provided opaque fields; it must not split IDs on delimiters such as `:` or `:topic:`.
-- [ ] Idempotency keys are sent on every side-effecting Gateway method used for message send / delivery. ClawFace's existing `reqId` shape can be reused or aligned.
-- [ ] `services/transport/normalize.ts` is extended to validate OpenClaw Gateway Protocol frames in the same way it currently validates `services/transport/websocket.ts` frames. Frame-shape mismatches surface as `malformed` events rather than crashing.
+- [x] A new ClawFace transport (`services/transport/openclaw-gateway.ts`) that implements the OpenClaw Gateway Protocol `connect` handshake at protocol version 3 with `role: "operator"` and scopes `operator.read`, `operator.write`.
+- [x] Pairing flow that collects an OpenClaw gateway address + auth (token or device pairing approval), goes through OpenClaw's `connect.challenge` signed handshake, and stores the resulting `deviceToken` in `services/secureStore.ts`. No bespoke ClawFace pairing handshake.
+- [x] Round-trip support for `sessions.send` (user turns) and `sessions.messages.subscribe` (streamed events). Maps onto ClawFace's existing `Message` discriminated union (user / agent / tool / approval), including full-text upsert semantics for OpenClaw chat deltas.
+- [x] Session and thread identifiers are treated as opaque strings. ClawFace stores and routes with the full key; it does not split IDs on delimiters.
+- [x] Idempotency keys are sent on `sessions.send`. ClawFace generates a unique key per send call.
+- [x] `services/transport/normalize.ts` is extended with `GatewayTransportEventNormalizer` to validate OpenClaw Gateway Protocol frames (`session.message`, `chat`, `agent`, `session.tool` event families). Frame-shape mismatches surface as `malformed` events rather than crashing.
+- [ ] Gateway approval resolution (`resolveApproval`) — currently throws "not implemented yet". Approval bridging itself is Post-M1 (CF-015), but the transport stub should surface a transport notice rather than throwing.
+- [ ] Gateway device token revocation via RPC — currently only deletes the local credential without calling a Gateway method. The exact self-revocation method needs to be confirmed and wired.
 
 **M1 single-thread round-trip (validates path B)**
 
@@ -770,13 +774,14 @@ CF-026 must update the canonical docs rather than turning this backlog item into
 - [ ] Sending a user message in one Thread produces an OpenClaw `agent` reply in the same Thread, streamed via `event:agent` and rendered as `message_delta` followed by a final upsert.
 - [ ] Tool activity from OpenClaw renders as ClawFace tool chips (running → done / failed), driven by OpenClaw's streamed agent events. No fake/local-fallback tool chips.
 - [ ] Approval requests from OpenClaw (if surfaced during M1 testing) render as ClawFace approval cards via the existing `approval_request` / `approval_decision` flow. Approval bridging deeper than the M1 single-thread loop remains scoped to CF-015 (Post-M1).
-- [ ] Unpair revokes the device token (via `node.pair.revoke` / equivalent operator method) and the gateway rejects further connects with the revoked token.
+- [ ] Unpair revokes the device token via Gateway RPC and the gateway rejects further connects with the revoked token.
 - [ ] CF-016 path B is satisfied when the above round-trip works against a real local OpenClaw gateway.
 
-**Upstream-OpenClaw work (if any)**
+**Documentation and integration**
 
+- [ ] `README.md` documents path B local test instructions: how to pair ClawFace with a running `openclaw gateway` via the `openclaw-gateway` transport type.
 - [ ] An honest assessment, written into `docs/PROTOCOL.md`, of which extensions ClawFace would want upstream OpenClaw to add for mobile UX. Each candidate extension is described as a small upstream PR proposal, not a new protocol.
-- [ ] The `scripts/openclaw-bridge.js` adapter remains for users running `openclaw agent` CLI without a gateway, but is documented as a legacy fallback rather than the M1 path. CF-016 path A continues to use it; CF-016 path B uses the Gateway Protocol transport directly.
+- [x] The `scripts/openclaw-bridge.js` adapter remains for users running `openclaw agent` CLI without a Gateway, documented as a legacy fallback rather than the M1 path. CF-016 path A continues to use it; CF-016 path B uses the Gateway Protocol transport directly.
 
 #### Test plan
 
@@ -796,7 +801,7 @@ Manual (path B run):
 
 #### Files
 
-- `services/transport/openclaw-gateway.ts` (new) — Gateway Protocol transport implementation
+- `services/transport/openclaw-gateway.ts` — Gateway Protocol transport implementation
 - `services/transport/normalize.ts` — extended to validate Gateway Protocol frames
 - `services/transport/types.ts` — types aligned with OpenClaw's `req`/`res`/`event` shapes where applicable
 - `services/secureStore.ts` — stores OpenClaw `deviceToken`
@@ -1112,4 +1117,4 @@ Manual: start from existing persisted local state where available and confirm ag
 | CF-023 | Bridge CLI adapter fallback is honest and configurable | M1 | P0 | DONE | CF-014 |
 | CF-024 | Document `OPENCLAW_SESSION_ID` and repo binding for first-run | M1 | P1 | DONE | CF-014 |
 | CF-025 | Gateway Protocol profile and discovery probe | M1 | P1 | DONE | CF-001, CF-014 |
-| CF-026 | OpenClaw Gateway transport implementation (M1 path B) | M1 | P1 | TODO | CF-025 |
+| CF-026 | OpenClaw Gateway transport implementation (M1 path B) | M1 | P1 | IN_PROGRESS | CF-025 |

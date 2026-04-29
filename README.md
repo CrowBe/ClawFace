@@ -5,10 +5,11 @@ ClawFace is an Expo mobile **AI agent operations app**: a mobile command surface
 ## What it does
 
 - Pair with a local agent via QR code or pasted pairing payload.
-- Keep agent/session metadata locally, with session keys stored in SecureStore.
+- Connect to OpenClaw as an operator client via the Gateway Protocol (path B), or through the legacy CLI bridge (path A).
+- Keep agent/session metadata locally, with session keys and Gateway device tokens stored in SecureStore.
 - Open agent threads, send messages, and respond to approval requests.
 - Receive agent notifications through Expo Notifications.
-- Run against a bundled WebSocket dev server for local testing.
+- Run against a bundled WebSocket dev server, the OpenClaw CLI bridge, or a local OpenClaw Gateway.
 
 ## Documentation
 
@@ -36,9 +37,55 @@ npm run dev:server
 
 Paste the server's printed JSON payload into the app's pairing screen.
 
-### OpenClaw local bridge
+### OpenClaw integration
 
-`scripts/openclaw-bridge.js` is a thin WebSocket-to-CLI adapter that lets ClawFace pair with a local OpenClaw install for end-to-end testing of the wire protocol. It is not an agent runtime — it shells out to a separately-installed `openclaw` binary and translates between the ClawFace wire protocol and the OpenClaw CLI.
+ClawFace has two paths for connecting to a local OpenClaw instance:
+
+- **Path B — OpenClaw Gateway Protocol (recommended).** ClawFace pairs directly with a locally-running `openclaw gateway` as an `operator` role client over OpenClaw's documented Gateway WebSocket Protocol. This is the production-transport-shaped path. See [OpenClaw Gateway](#openclaw-gateway-path-b) below.
+- **Path A — Legacy CLI bridge.** ClawFace pairs with `scripts/openclaw-bridge.js`, which shells out to the `openclaw` CLI. Lower friction to set up, lower fidelity to the production transport. See [OpenClaw local bridge](#openclaw-local-bridge-path-a) below.
+
+### OpenClaw Gateway (path B)
+
+ClawFace can connect directly to a running OpenClaw Gateway as an operator client. The app transport (`services/transport/openclaw-gateway.ts`) implements Gateway Protocol v3: `connect` handshake with signed challenge, `sessions.send` for user turns, `sessions.messages.subscribe` for streamed events, and `sessions.create` for new threads.
+
+To pair ClawFace with a local Gateway, construct a pairing payload with `transport: "openclaw-gateway"` and paste it into the app's pair screen:
+
+```json
+{
+  "v": 2,
+  "host": "127.0.0.1",
+  "port": 18789,
+  "transport": "openclaw-gateway",
+  "token": "<your-gateway-auth-token>",
+  "name": "OpenClaw Gateway",
+  "context": {
+    "repoName": "my-project",
+    "agentSessionId": "agent:main:main"
+  }
+}
+```
+
+The `token` field should contain a Gateway-accepted auth token (the same token used with `npm run gateway:discover`). The optional `context` field populates Agent Context display in the app.
+
+Once paired, ClawFace stores the device token in SecureStore and routes all communication through the Gateway transport. Streamed Gateway events (`session.message`, `chat`, `agent`, `session.tool`) are normalized into ClawFace's message model.
+
+To validate Gateway connectivity before pairing:
+
+```bash
+OPENCLAW_GATEWAY_URL=ws://127.0.0.1:18789 \
+OPENCLAW_GATEWAY_TOKEN=<your-token> \
+npm run gateway:discover
+```
+
+Known path B limitations:
+
+- Gateway approval resolution is not yet wired (approvals are Post-M1; see CF-015).
+- Device token revocation currently only clears the local credential; Gateway-side RPC revocation is not yet implemented.
+- End-to-end validation against a real local Gateway is tracked by CF-016 path B.
+
+### OpenClaw local bridge (path A)
+
+`scripts/openclaw-bridge.js` is a thin WebSocket-to-CLI adapter that lets ClawFace pair with a local OpenClaw install for end-to-end testing of the legacy wire protocol. It is not an agent runtime — it shells out to a separately-installed `openclaw` binary and translates between the ClawFace wire protocol and the OpenClaw CLI. This is the legacy fallback for users running `openclaw agent` CLI without a Gateway.
 
 It binds ClawFace to one explicit local OpenClaw target: repo path, branch, OpenClaw session id, and thread id. The wire-protocol fields it advertises (`agentSessionId`, `agentThreadId`) are vendor-neutral so other adapters can satisfy the same contract without changing the mobile client.
 
