@@ -11,6 +11,12 @@ type PendingRequest = {
   reject: (error: Error) => void;
 };
 
+type GatewayPolicy = {
+  maxPayload?: number;
+  maxBufferedBytes?: number;
+  tickIntervalMs?: number;
+};
+
 export interface GatewayDeviceIdentity {
   id: string;
   publicKey: string;
@@ -53,6 +59,34 @@ function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+function byteLength(value: string): number {
+  let bytes = 0;
+  for (let i = 0; i < value.length; i += 1) {
+    const code = value.charCodeAt(i);
+    if (code <= 0x7f) bytes += 1;
+    else if (code <= 0x7ff) bytes += 2;
+    else if (code >= 0xd800 && code <= 0xdbff) {
+      bytes += 4;
+      i += 1;
+    } else bytes += 3;
+  }
+  return bytes;
+}
+
+function parsePositiveNumber(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : undefined;
+}
+
+function extractGatewayPolicy(helloOk: unknown): GatewayPolicy | undefined {
+  if (!isObject(helloOk) || !isObject(helloOk.policy)) return undefined;
+  const policy: GatewayPolicy = {
+    maxPayload: parsePositiveNumber(helloOk.policy.maxPayload),
+    maxBufferedBytes: parsePositiveNumber(helloOk.policy.maxBufferedBytes),
+    tickIntervalMs: parsePositiveNumber(helloOk.policy.tickIntervalMs),
+  };
+  return policy.maxPayload || policy.maxBufferedBytes || policy.tickIntervalMs ? policy : undefined;
+}
+
 function extractChallenge(value: unknown): { nonce: string; ts?: number } | null {
   if (!isObject(value) || value.type !== 'event' || value.event !== 'connect.challenge' || !isObject(value.payload)) return null;
   const nonce = value.payload.nonce;
@@ -68,6 +102,7 @@ export class OpenClawGatewayTransport implements AgentTransport {
   private pending = new Map<string, Map<string, PendingRequest>>();
   private normalizers = new Map<string, GatewayTransportEventNormalizer>();
   private options = new Map<string, GatewayConnectOptions>();
+  private policies = new Map<string, GatewayPolicy>();
   private deviceIds = new Map<string, string>();
   private subscribedThreads = new Map<string, Set<string>>();
 
@@ -154,6 +189,7 @@ export class OpenClawGatewayTransport implements AgentTransport {
           clearTimeout(connectTimeout);
           if (frame.ok) {
             await this.persistDeviceToken(agent.id, frame.payload);
+            this.persistGatewayPolicy(agent.id, frame.payload);
             this.states.set(agent.id, 'connected');
             this.emit({ type: 'connection_changed', agentId: agent.id, online: true });
             resolve();
@@ -212,18 +248,48 @@ export class OpenClawGatewayTransport implements AgentTransport {
     await setGatewayDeviceToken(agentId, helloOk.auth.deviceToken);
   }
 
+  private persistGatewayPolicy(agentId: string, helloOk: unknown): void {
+    const policy = extractGatewayPolicy(helloOk);
+    if (!policy) return;
+    this.policies.set(agentId, policy);
+  }
+
+  private validateOutboundFrame(agentId: string, frameJson: string): Error | null {
+    const policy = this.policies.get(agentId);
+    if (!policy) return null;
+
+    const size = byteLength(frameJson);
+    if (policy.maxPayload && size > policy.maxPayload) {
+      return new Error(`Gateway frame is ${size} bytes, exceeding maxPayload ${policy.maxPayload}`);
+    }
+
+    const bufferedAmount = this.sockets.get(agentId)?.bufferedAmount ?? 0;
+    if (policy.maxBufferedBytes && bufferedAmount + size > policy.maxBufferedBytes) {
+      return new Error(`Gateway send buffer would exceed maxBufferedBytes ${policy.maxBufferedBytes}`);
+    }
+
+    return null;
+  }
+
   private request(agentId: string, method: string, params: unknown): Promise<unknown> {
     const ws = this.sockets.get(agentId);
     if (!ws || ws.readyState !== WebSocket.OPEN) return Promise.reject(new Error('OpenClaw Gateway socket is not open'));
 
     const id = makeId();
+    const frameJson = JSON.stringify({ type: 'req', id, method, params });
+    const policyError = this.validateOutboundFrame(agentId, frameJson);
+    if (policyError) {
+      this.emit({ type: 'transport_notice', level: 'warning', message: policyError.message });
+      return Promise.reject(policyError);
+    }
+
     return new Promise((resolve, reject) => {
       const timeout = setTimeout(() => {
         this.pending.get(agentId)?.delete(id);
         reject(new Error(`${method} timed out`));
       }, REQUEST_TIMEOUT_MS);
       this.pending.get(agentId)?.set(id, { timeout, resolve, reject });
-      ws.send(JSON.stringify({ type: 'req', id, method, params }));
+      ws.send(frameJson);
     });
   }
 
@@ -236,6 +302,7 @@ export class OpenClawGatewayTransport implements AgentTransport {
     this.sockets.delete(agentId);
     this.pending.delete(agentId);
     this.normalizers.delete(agentId);
+    this.policies.delete(agentId);
     this.subscribedThreads.delete(agentId);
     this.agents.delete(agentId);
     this.options.delete(agentId);
