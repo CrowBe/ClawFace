@@ -44,9 +44,10 @@ The core promise (per `docs/PRODUCT_CONTEXT.md`):
 Architectural implications:
 
 - ClawFace is the mobile **command surface**; it is not an agent runtime, not a model provider, and not a tool/MCP configuration system (`docs/PRODUCT_CONTEXT.md` non-goals 1 and 2).
-- For OpenClaw integration, ClawFace is an **operator-class client** of the OpenClaw Gateway Protocol. It sits alongside the OpenClaw CLI, web UI, and native apps as a control-plane surface for an Agent Operator. It is not an OpenClaw node, runtime, channel handler, bridge, or capability host.
+- For OpenClaw integration, ClawFace is an **operator-class client** of the OpenClaw Gateway Protocol. It sits alongside the OpenClaw CLI, web UI, and native apps as a control-plane surface for an Agent Operator. It is not an OpenClaw node, runtime, channel handler, bridge, or capability host. OpenClaw's Gateway WebSocket Protocol is the single control-plane and node transport for all OpenClaw clients; the legacy TCP bridge has been removed from OpenClaw. ClawFace does not need to patch, fork, or extend OpenClaw to connect — it uses the existing Gateway exactly as the CLI, web UI, and macOS app do.
 - The first commercial wedge is technical users supervising coding agents (OpenClaw-style today), but the architecture must not assume the user is a developer or that the agent on the other end is a coding agent.
 - The stable contract between ClawFace and OpenClaw path B is the OpenClaw Gateway Protocol plus the ClawFace profile/overlay in `docs/PROTOCOL.md`. Legacy path A remains a ClawFace bridge/mock protocol fallback for local CLI-only development.
+- OpenClaw pairing does not require any OpenClaw-side modification. The Gateway accepts any client presenting a valid token + signed challenge nonce. ClawFace-specific pairing UX (QR code flow, paste input, Bonjour auto-discovery) is purely a mobile client concern; the Gateway protocol handshake is identical for all operator clients.
 
 ---
 
@@ -128,15 +129,19 @@ Current repo shape:
 - Legacy WebSocket transport for paired agent communication via bridge/mock server
 - OpenClaw Gateway transport (`services/transport/openclaw-gateway.ts`) implementing Gateway Protocol v3 `connect` handshake, `sessions.send`, `sessions.messages.subscribe`, and `sessions.create` as an `operator` role client
 - Gateway event normalization (`services/transport/normalize.ts`) for `session.message`, `chat`, and `session.tool` event families; unsupported `agent` streams surface as transport notices
-- Read-only Gateway discovery script (`scripts/openclaw-gateway-discover.js`) for protocol validation
+- Read-only Gateway discovery script (`scripts/openclaw-gateway-discover.js`) for protocol validation and client identity/handshake testing
 - Mock/dev WebSocket server and OpenClaw CLI bridge for local testing
+- Three viable pairing token paths confirmed (shared token, OpenClaw bootstrap token from `device-pair` plugin, direct device pairing) — none require OpenClaw modification
 - Expo Notifications integration
 - Production Android cleartext traffic disabled, with explicit development opt-in
 
 Important current boundary:
 
 - ClawFace is currently a mobile client with two transport paths: legacy bridge/mock (path A) and OpenClaw Gateway (path B, in progress).
-- The Gateway transport implementation covers connect, send, subscribe, and thread creation. Remaining work includes mobile device signing, Gateway-side device token revocation, approval resolution wiring, and end-to-end validation against a real local OpenClaw gateway (CF-026 remaining acceptance criteria; CF-016 path B).
+- The Gateway transport implementation covers connect, send, subscribe, thread creation, and non-throwing approval-resolution notices. Remaining work includes mobile device signing, Gateway-side device token revocation, `hello-ok.policy` limit consumption, and end-to-end validation against a real local OpenClaw gateway (CF-026 remaining acceptance criteria; CF-016 path B).
+- OpenClaw's Gateway is the sole production transport for all OpenClaw clients (the legacy TCP bridge has been removed from OpenClaw). ClawFace connects to the same WebSocket surface as the CLI, web UI, and macOS app without requiring any OpenClaw-side changes.
+- The current client identity uses `openclaw-probe` / `probe` (a read-only probe identity). A first-class `clawface-mobile` client ID is a candidate upstream request for correct presence visibility — it is not required for M1 connectivity.
+- OpenClaw provides Bonjour/mDNS discovery (`_openclaw-gw._tcp`) and wide-area DNS-SD for LAN and Tailscale-based auto-discovery. ClawFace does not yet consume this but can do so for improved local pairing UX.
 - There is no production hosted relay/control plane yet.
 - The persisted agent model has an explicit `mode: 'direct' | 'relay'` field, optional `relayUrl`, and `transport: 'legacy-websocket' | 'openclaw-gateway'`; direct mode with either transport is the implemented/local path.
 - Relay transport is not implemented yet. Relay-mode agents currently fall back to the existing WebSocket transport with a warning until the hosted relay/control plane exists.
@@ -288,11 +293,15 @@ Hosted mode should launch as a control-plane/relay product, not as transcript ho
 
 ## 8. Near-term Architecture Priorities
 
-1. Define the pairing/session protocol contract.
-2. Document message schemas for transport events.
-3. Add replay-safe approval semantics.
-4. Add revocation semantics for devices, agents, and sessions.
-5. Define local/direct mode vs hosted/relay mode boundaries.
+1. ~~Define the pairing/session protocol contract.~~ Done — `docs/PROTOCOL.md` profile/overlay over OpenClaw Gateway Protocol v3.
+2. ~~Document message schemas for transport events.~~ Done — transport types in `services/transport/types.ts`, Gateway normalizer in `services/transport/normalize.ts`.
+3. ~~Add replay-safe approval semantics.~~ Done — `reqId` in CF-004.
+4. Add revocation semantics for devices, agents, and sessions. (Device token revocation via Gateway RPC remains to be confirmed and wired.)
+5. ~~Define local/direct mode vs hosted/relay mode boundaries.~~ Done — `mode: 'direct' | 'relay'` in CF-008.
 6. Keep transcript/content sync out of scope until encryption, retention, and pricing are explicit.
+7. Wire mobile device Ed25519 signing for non-loopback Gateway connections.
+8. Consume `hello-ok.policy` limits (`maxPayload`, `tickIntervalMs`) in the Gateway transport.
+9. Add Bonjour/mDNS browsing for LAN auto-discovery of OpenClaw Gateways.
+10. Accept OpenClaw bootstrap token format alongside ClawFace's interim pairing payload.
 
 The senior-looking work is the protocol, trust boundary, revocation model, replay-safe approvals, and cost-aware relay design — not rushing cloud features.

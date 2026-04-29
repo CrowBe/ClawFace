@@ -1,11 +1,12 @@
 # ClawFace Protocol Profile
 
 Status: Draft
-Profile revision: `0.6.0`
+Profile revision: `0.7.0`
 OpenClaw Gateway Protocol: `v3` for path B
 Legacy bridge protocol: `0.5.0` for path A
 Created: 2026-04-27
 Updated: 2026-04-29
+Transport investigation: 2026-04-29
 
 This document is now a **ClawFace profile/overlay**, not a complete parallel wire protocol. ClawFace's production-shaped OpenClaw path is to connect as an `operator` role client to the OpenClaw Gateway WebSocket Protocol. OpenClaw owns the Gateway frame format, handshake, authentication, method schemas, event schemas, scope checks, idempotency requirements, and device-token lifecycle.
 
@@ -21,6 +22,10 @@ Product architecture, trust boundaries, hosted relay responsibilities, and appro
 
 Path B is the long-term M1 shape: ClawFace connects directly to a locally-running or self-hosted OpenClaw Gateway, defaulting to `ws://127.0.0.1:18789`, as an `operator` role client over Gateway protocol v3.
 
+OpenClaw's Gateway WebSocket Protocol is the **single** control-plane and node transport for all OpenClaw clients (CLI, web UI, macOS app, iOS/Android nodes, headless nodes). The legacy TCP bridge has been removed from OpenClaw; `bridge.*` config keys are no longer in the Gateway schema. All current and future OpenClaw clients connect over this same WebSocket surface. ClawFace does not need to patch, fork, or extend OpenClaw to connect — it uses the existing Gateway exactly as the CLI, web UI, and macOS app do.
+
+Reference: https://docs.openclaw.ai/gateway/protocol/
+
 ClawFace-specific responsibilities on this path:
 
 - present a mobile command surface for an Agent Operator;
@@ -28,7 +33,8 @@ ClawFace-specific responsibilities on this path:
 - persist Gateway-issued device tokens securely in the app when pairing is implemented;
 - map Gateway sessions, topics, messages, tool events, and approvals onto ClawFace Workstreams, Threads, Agent Context, and Message models;
 - keep OpenClaw identifiers opaque; ClawFace stores and routes with full IDs or separately-provided fields and must not derive meaning by delimiter parsing;
-- normalize malformed or unsupported Gateway frames into controlled transport notices before touching app state.
+- normalize malformed or unsupported Gateway frames into controlled transport notices before touching app state;
+- respect `hello-ok.policy` limits (`maxPayload`, `maxBufferedBytes`, `tickIntervalMs`) for transport hygiene.
 
 OpenClaw-owned details that this document intentionally does **not** duplicate:
 
@@ -38,7 +44,9 @@ OpenClaw-owned details that this document intentionally does **not** duplicate:
 - method parameter/response schemas;
 - event payload schemas;
 - server-side scope enforcement;
-- device-token issuance, rotation, and revocation semantics.
+- device-token issuance, rotation, and revocation semantics;
+- Bonjour/mDNS service advertisement and TXT record schemas;
+- auth mode configuration (`token`, `password`, `trusted-proxy`, `tailscale`, `none`).
 
 ### Path A — legacy ClawFace bridge/mock protocol
 
@@ -60,10 +68,10 @@ ClawFace's Gateway client must wait for `event: "connect.challenge"`, then send 
 Baseline connect intent:
 
 - `role`: `operator`
-- `client.id`: an OpenClaw-accepted client id. The CF-025 discovery helper uses the built-in `openclaw-probe` id until OpenClaw exposes a first-class ClawFace/mobile operator id.
-- `client.mode`: an OpenClaw-accepted non-node mode. The discovery script and current app transport both use `probe`; this should migrate to a first-class ClawFace/mobile operator mode when OpenClaw adds one.
-- `auth.token`: shared Gateway token or previously-issued device token when available
-- `device`: signed device identity, including the challenge nonce, when required by Gateway auth mode. This remains a CF-026 gap for the mobile app; current local-M1 pairing relies on a Gateway-accepted token/device token.
+- `client.id`: an OpenClaw-accepted client id. The current app transport and discovery helper use the built-in `openclaw-probe` id. OpenClaw validates `client.id` against a built-in enum; known accepted values include `cli`, `ui`, `webchat`, `gateway-client`, `openclaw-probe`, and `ios-node`. A first-class `clawface-mobile` id is a candidate upstream request (see §2.7).
+- `client.mode`: an OpenClaw-accepted non-node mode. The current transport uses `probe`. Known accepted operator modes include `operator`, `cli`, `ui`, `webchat`, `backend`, `probe`, and `test`. Presence entries are skipped for `cli` mode to avoid noise; `probe` mode may receive similar treatment. A mobile-appropriate mode is a candidate upstream request (see §2.7).
+- `auth.token`: shared Gateway token, bootstrap token from an OpenClaw pairing flow, or previously-issued device token. OpenClaw accepts all three through the same `connect.params.auth.token` field. No OpenClaw-side patching is required for ClawFace to authenticate.
+- `device`: signed device identity, including the challenge nonce, when required by Gateway auth mode. The v3 signature payload format is: `v3|deviceId|clientId|clientMode|role|scopes|signedAtMs|token|nonce|platform|deviceFamily`. The discovery script (`scripts/openclaw-gateway-discover.js`) demonstrates the complete Ed25519 signing flow. Mobile device signing remains a CF-026 gap; current local-M1 pairing relies on a Gateway-accepted token/device token.
 
 The read-only discovery script (`scripts/openclaw-gateway-discover.js`) validates this handshake shape. The app transport (`services/transport/openclaw-gateway.ts`) implements challenge handling and token/device-token authentication with SecureStore persistence; mobile device signing remains to be wired.
 
@@ -77,13 +85,26 @@ Minimum desired scopes by ClawFace surface:
 | Send user turns, steer/abort where exposed in UI | `operator.write` |
 | Resolve runtime approval/handoff requests | `operator.approvals` |
 | Pair/revoke ClawFace device tokens | `operator.pairing` |
-| Gateway/runtime administration | not part of M1; avoid by default |
+| Access secret-bearing `talk.config` | `operator.talk.secrets` (not needed for M1 command surface) |
+| Gateway/runtime administration | `operator.admin` — not part of M1; avoid by default |
 
 The discovery script requests `operator.read` only. The app transport requests `operator.read,operator.write` by default. `operator.admin` is not required for the M1 command surface and should not be a default.
 
 The discovery script defaults to `operator.read`. Set `OPENCLAW_GATEWAY_PRINT_FULL_FEATURES=1` to print the full advertised method/event list, or `OPENCLAW_GATEWAY_SCOPES=operator.read,operator.write,operator.pairing,operator.approvals` to inspect a broader scope set without sending write probes. The app transport defaults to `operator.read,operator.write,operator.pairing` so it can self-revoke paired device tokens when a signed device identity is available.
 
-The first app pairing bridge accepts a ClawFace QR/paste payload with `transport: "openclaw-gateway"`, `host`, `port`, optional `secure`, optional display `context`, and either `token` or `sessionKey` containing the Gateway-issued/approved operator credential. The app stores that credential as an OpenClaw Gateway device token in SecureStore and marks the paired agent as `transport: "openclaw-gateway"`. This is an interim local-M1 path until OpenClaw exposes a mobile-oriented QR/pairing helper; it must not become a separate ClawFace auth protocol.
+Plugin-registered gateway RPC methods may request their own operator scope, but reserved core admin prefixes (`config.*`, `exec.approvals.*`, `wizard.*`, `update.*`) always resolve to `operator.admin`. Some slash commands reached through `chat.send` apply stricter command-level checks on top (e.g. persistent `/config set` writes require `operator.admin`).
+
+### Pairing paths (no OpenClaw patching required)
+
+OpenClaw pairing does not require any OpenClaw-side modification for ClawFace. The Gateway accepts any client that presents a valid token + signed challenge nonce during `connect`. Three token-acquisition paths are available:
+
+1. **Shared Gateway token** — the simplest local-M1 path. The user copies the Gateway token into a ClawFace pairing payload. The token is passed in `connect.params.auth.token`.
+2. **OpenClaw bootstrap token** — OpenClaw's `device-pair` plugin (Telegram `/pair`, `openclaw qr` CLI) already generates base64-encoded setup codes containing `{ url, bootstrapToken }`. ClawFace can accept the same format. The bootstrap token carries bounded operator scopes (`operator.approvals`, `operator.read`, `operator.talk.secrets`, `operator.write`) and works for initial connect; the Gateway issues a device token in `hello-ok.auth.deviceToken` for subsequent reconnects.
+3. **Direct device pairing** — ClawFace connects with an ephemeral device identity and the Gateway creates a pending device pairing request that the user approves via `openclaw devices approve <requestId>` or via a channel-based approval flow. This path requires mobile device signing (CF-026 gap).
+
+The **only** ClawFace-specific part of pairing is how the user gets the token/URL onto the phone — the QR code scanning flow, paste input, or Bonjour auto-discovery. The Gateway protocol handshake is identical regardless.
+
+The first app pairing bridge accepts a ClawFace QR/paste payload with `transport: "openclaw-gateway"`, `host`, `port`, optional `secure`, optional display `context`, and either `token` or `sessionKey` containing the Gateway-issued/approved operator credential. The app stores that credential as an OpenClaw Gateway device token in SecureStore and marks the paired agent as `transport: "openclaw-gateway"`. This is an interim local-M1 path that coexists with the OpenClaw bootstrap token format; it must not become a separate ClawFace auth protocol.
 
 
 ### Gateway methods ClawFace expects to use
@@ -140,14 +161,13 @@ OpenClaw Gateway side-effecting methods require idempotency keys. The future app
 
 ### Candidate upstream OpenClaw helpers
 
-Potential small upstream improvements for mobile UX, to validate after the first app transport spike:
+Potential small upstream improvements for mobile UX. These are upstream OpenClaw proposals, not ClawFace-specific protocol forks. The transport investigation (2026-04-29) confirmed that none of these are required for M1 pairing or messaging — they are quality-of-life enhancements.
 
-- a mobile-oriented pairing payload/QR helper that bundles Gateway URL, expected auth mode, device approval guidance, and TLS fingerprint when applicable;
-- documented minimal operator scope bundles for mobile read-only, mobile messaging, approvals, and pairing self-management;
-- an explicit Agent Context summary shape suitable for mobile display, if `hello-ok.snapshot`, presence, and session previews do not already expose enough metadata;
-- a push-notification bridge for approval/handoff events that carries only route metadata and no sensitive transcript content.
-
-These are upstream OpenClaw proposals, not ClawFace-specific protocol forks.
+1. **Register a `clawface-mobile` client ID** in the Gateway's built-in client enum, with an operator-appropriate mode (e.g. `operator` or a new `mobile` mode). This is a ~1-line enum extension. Benefit: correct presence visibility, mobile-specific policy hooks, clean audit trail. Without it, ClawFace uses `openclaw-probe` / `probe` and may be invisible in presence.
+2. **Accept `clawface-mobile` in presence entry creation** so mobile operator clients show up in the macOS app's Instances tab and `system-presence` results (currently, `cli` mode is skipped; `probe` may be too).
+3. **Document minimal operator scope bundles** for mobile read-only, mobile messaging, approvals, and pairing self-management.
+4. **Explicit Agent Context summary shape** suitable for mobile display, if `hello-ok.snapshot`, presence, and session previews do not already expose enough metadata.
+5. **Push-notification bridge** for approval/handoff events that carries only route metadata and no sensitive transcript content.
 
 ---
 
@@ -161,6 +181,52 @@ Inbound Gateway frames must pass through the ClawFace transport normalization se
 - Complete messages and thread/session snapshots should be idempotent upserts keyed by opaque IDs.
 - Streaming deltas must only append to the message/session route they belong to. If OpenClaw provides sequence numbers, ClawFace should use them; otherwise duplicates are handled as delivered.
 - Approval/handoff requests are keyed by the opaque Gateway approval request id supplied by OpenClaw.
+
+### `hello-ok.policy` consumption
+
+The Gateway returns transport policy limits in `hello-ok.payload.policy`:
+
+- `maxPayload` (bytes): maximum frame size the Gateway will accept. ClawFace should guard outbound frame size against this limit.
+- `maxBufferedBytes` (bytes): maximum buffered bytes before the Gateway closes the connection. ClawFace should not queue unbounded outbound data.
+- `tickIntervalMs` (ms): Gateway tick/heartbeat interval. ClawFace should use this for reconnect/keepalive timing rather than hardcoded constants.
+
+With diagnostics enabled, oversized inbound frames and slow outbound buffers emit `payload.large` events (sizes, limits, surfaces, safe reason codes — no message body or secrets) before the Gateway closes or drops the affected frame.
+
+### Discovery: Bonjour/mDNS and wide-area DNS-SD
+
+OpenClaw ships a bundled Bonjour plugin that advertises `_openclaw-gw._tcp` via mDNS on LAN. TXT records include non-secret hints:
+
+- `role=gateway`
+- `displayName=<name>`
+- `gatewayPort=<port>` (Gateway WS + HTTP, default 18789)
+- `gatewayTls=1` (only when TLS enabled)
+- `gatewayTlsSha256=<fingerprint>` (only when TLS enabled)
+- `transport=gateway`
+
+ClawFace can browse `_openclaw-gw._tcp` on `local.` for LAN auto-discovery or on a configured wide-area DNS-SD domain (e.g. `openclaw.internal.`) for Tailscale setups. This eliminates manual URL entry for local pairing.
+
+Security notes from OpenClaw docs:
+
+- Bonjour/mDNS TXT records are unauthenticated. Clients must not treat TXT as authoritative routing.
+- Route using the resolved service endpoint (SRV + A/AAAA). Treat `lanHost`, `gatewayPort`, `gatewayTlsSha256` as hints only.
+- TLS pinning must never allow an advertised fingerprint to override a previously stored pin.
+
+This is existing OpenClaw infrastructure that requires no upstream changes to consume.
+
+### `system-event` presence beacons
+
+OpenClaw operator clients can send periodic `system-event` beacons to enrich their presence entry. The macOS app uses this to report host name, IP, and `lastInputSeconds`. ClawFace could use `system-event` to keep its mobile presence visible to other OpenClaw clients and report device metadata (device name, platform, battery level).
+
+### Broadcast event scoping
+
+Gateway broadcast events are scope-gated:
+
+- Chat, agent, and tool-result frames require at least `operator.read`.
+- Plugin-defined `plugin.*` broadcasts are gated to `operator.write` or `operator.admin`.
+- Status and transport events (`heartbeat`, `presence`, `tick`, connect/disconnect lifecycle) remain unrestricted.
+- Unknown broadcast event families are scope-gated by default (fail-closed).
+
+Each client connection keeps its own per-client sequence number for monotonic ordering.
 
 ---
 
