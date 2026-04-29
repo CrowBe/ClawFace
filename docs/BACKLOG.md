@@ -1193,4 +1193,4 @@ Manual:
 | CF-024 | Document `OPENCLAW_SESSION_ID` and repo binding for first-run | M1 | P1 | DONE | CF-014 |
 | CF-025 | Gateway Protocol profile and discovery probe | M1 | P1 | DONE | CF-001, CF-014 |
 | CF-026 | OpenClaw Gateway transport implementation (M1 path B) | M1 | P1 | IN_PROGRESS | CF-025 |
-|| CF-027 | Transport investigation follow-ups: Bonjour discovery, bootstrap token, policy limits | Post-M1 | P2 | TODO | CF-026 |
+| CF-027 | Transport investigation follow-ups: Bonjour discovery, bootstrap token, policy limits | Post-M1 | P2 | TODO | CF-026 |
