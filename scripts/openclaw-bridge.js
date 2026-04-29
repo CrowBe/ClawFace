@@ -170,7 +170,9 @@ function handleAgentSocket(ws) {
       const session = sessionForHello(msg);
       if (!session) {
         send(ws, { type: 'error', error: 'Invalid, revoked, unknown, or mismatched OpenClaw session' });
-        ws.close();
+        // Let the error frame flush before closing so clients can distinguish
+        // a rejected/revoked session from a transient socket close.
+        setTimeout(() => ws.close(), 25);
         return;
       }
       sessionKey = msg.sessionKey;
