@@ -582,7 +582,7 @@ The scope is the smallest possible loop that satisfies `docs/PRODUCT_CONTEXT.md`
 - [x] If path B was used, `README.md` documents the path B run instructions (point ClawFace at a running `openclaw gateway`, complete the operator pairing handshake, exercise the M1 round-trip)
 - [x] `README.md` documents what the maintainer should see at each step: pairing succeeds, paired Trusted Agent shows Agent Context derived from OpenClaw (`hello-ok.snapshot` / `presence` for path B; bridge stdout for path A), the bound Thread shows repo/session metadata, sent message produces an OpenClaw response in the same Thread, transport logs confirm the response came from real OpenClaw (no fallback / no echo)
 - [x] `README.md` documents how to tell a real OpenClaw turn apart from a bridge-fallback turn (per CF-023)
-- [x] `README.md` documents known limitations and sharp edges honestly (e.g. approvals not bridged, only one bound thread per bridge instance, default session id assumes `agent:main:main`)
+- [x] `README.md` documents known limitations and sharp edges honestly (e.g. approvals not bridged, only one bound thread per bridge instance, default bridge session id assumes `main`)
 - [ ] Wire-protocol problems uncovered during the M1 validation are filed back as ClawFace issues / `docs/PROTOCOL.md` amendments before declaring M1 reachable
 - [ ] Ping the maintainer with concise test instructions once the M1 path is validated
 
@@ -661,14 +661,14 @@ Manual:
 
 #### Description
 
-The bridge defaults `OPENCLAW_SESSION_ID` and `OPENCLAW_THREAD_ID` to `agent:main:main` with no explanation of what those values mean or how to discover the right value for a real OpenClaw install. The `agent:main:main` pattern is the documented OpenClaw default session key (default agent `main`, default session `main`), but a first-time M1 tester reading the README has no way to know that, and no way to know what to change if their OpenClaw config uses a non-default agent name.
+The bridge defaults `OPENCLAW_SESSION_ID` and `OPENCLAW_THREAD_ID` to `main`, which maps to the OpenClaw CLI `--session-id main` value. Path A must use a safe CLI session id (for example `main` or `clawface-m1`), not a Gateway session key such as `agent:main:main`; path B owns opaque Gateway session keys.
 
 This issue keeps the default unchanged but makes the meaning, format, and override mechanism legible in `README.md`.
 
 #### Acceptance criteria
 
-- [x] `README.md` "OpenClaw local bridge" section documents the `OPENCLAW_SESSION_ID` / `OPENCLAW_THREAD_ID` format (`agent:<agentName>:<sessionLabel>`) and links to https://docs.openclaw.ai for canonical OpenClaw session-key behaviour
-- [x] `README.md` documents how to override `OPENCLAW_SESSION_ID` for a non-default OpenClaw agent configuration
+- [x] `README.md` "OpenClaw local bridge" section documents that `OPENCLAW_SESSION_ID` / `OPENCLAW_THREAD_ID` are path-A CLI session ids such as `main`, while Gateway session keys such as `agent:main:main` belong to path B
+- [x] `README.md` documents how to override `OPENCLAW_SESSION_ID` for a non-default path-A OpenClaw CLI session
 - [x] No code change unless required to keep the README example honest
 
 #### Test plan
