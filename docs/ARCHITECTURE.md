@@ -138,7 +138,7 @@ Current repo shape:
 Important current boundary:
 
 - ClawFace is currently a mobile client with two transport paths: legacy bridge/mock (path A) and OpenClaw Gateway (path B, in progress).
-- The Gateway transport implementation covers connect, send, subscribe, and thread creation. Remaining work includes mobile device signing, Gateway-side device token revocation, approval resolution wiring, `hello-ok.policy` limit consumption, and end-to-end validation against a real local OpenClaw gateway (CF-026 remaining acceptance criteria; CF-016 path B).
+- The Gateway transport implementation covers connect, send, subscribe, thread creation, and non-throwing approval-resolution notices. Remaining work includes mobile device signing, Gateway-side device token revocation, `hello-ok.policy` limit consumption, and end-to-end validation against a real local OpenClaw gateway (CF-026 remaining acceptance criteria; CF-016 path B).
 - OpenClaw's Gateway is the sole production transport for all OpenClaw clients (the legacy TCP bridge has been removed from OpenClaw). ClawFace connects to the same WebSocket surface as the CLI, web UI, and macOS app without requiring any OpenClaw-side changes.
 - The current client identity uses `openclaw-probe` / `probe` (a read-only probe identity). A first-class `clawface-mobile` client ID is a candidate upstream request for correct presence visibility — it is not required for M1 connectivity.
 - OpenClaw provides Bonjour/mDNS discovery (`_openclaw-gw._tcp`) and wide-area DNS-SD for LAN and Tailscale-based auto-discovery. ClawFace does not yet consume this but can do so for improved local pairing UX.
