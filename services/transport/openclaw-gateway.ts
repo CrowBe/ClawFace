@@ -95,6 +95,49 @@ function extractChallenge(value: unknown): { nonce: string; ts?: number } | null
   return { nonce, ts: typeof value.payload.ts === 'number' ? value.payload.ts : undefined };
 }
 
+function readString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim().length > 0 ? value : undefined;
+}
+
+function updatedMinutesAgo(updatedAt: unknown): number {
+  if (typeof updatedAt !== 'number' || !Number.isFinite(updatedAt)) return 0;
+  return Math.max(0, Math.floor((Date.now() - updatedAt) / 60_000));
+}
+
+function sessionEntryToThread(agentId: string, entry: unknown): Thread | null {
+  if (!isObject(entry)) return null;
+
+  const key = readString(entry.key) ?? readString(entry.sessionKey);
+  if (!key) return null;
+
+  const title = readString(entry.derivedTitle)
+    ?? readString(entry.label)
+    ?? readString(entry.displayName)
+    ?? 'OpenClaw session';
+
+  return {
+    id: key,
+    agentId,
+    title,
+    folder: null,
+    updatedMin: updatedMinutesAgo(entry.updatedAt),
+    unread: 0,
+    preview: readString(entry.lastMessagePreview) ?? '',
+    messages: [],
+    context: {
+      agentSessionId: key,
+      agentThreadId: readString(entry.sessionId),
+    },
+  };
+}
+
+function extractSessionThreads(agentId: string, payload: unknown): Thread[] {
+  if (!isObject(payload) || !Array.isArray(payload.sessions)) return [];
+  return payload.sessions
+    .map(entry => sessionEntryToThread(agentId, entry))
+    .filter((thread): thread is Thread => thread !== null);
+}
+
 export class OpenClawGatewayTransport implements AgentTransport {
   private sockets = new Map<string, WebSocket>();
   private states = new Map<string, SocketState>();
@@ -209,6 +252,15 @@ export class OpenClawGatewayTransport implements AgentTransport {
             this.startGatewayTickWatch(agent.id);
             this.states.set(agent.id, 'connected');
             this.emit({ type: 'connection_changed', agentId: agent.id, online: true });
+            this.hydrateGatewaySessions(agent.id).catch(err => {
+              this.emit({
+                type: 'transport_notice',
+                level: 'warning',
+                message: err instanceof Error
+                  ? `Could not list Gateway sessions: ${err.message}`
+                  : 'Could not list Gateway sessions',
+              });
+            });
             resolve();
           } else {
             const message = isObject(frame.error) && typeof frame.error.message === 'string'
@@ -415,6 +467,17 @@ export class OpenClawGatewayTransport implements AgentTransport {
           : 'Could not subscribe to Gateway session messages',
       });
     }
+  }
+
+  private async hydrateGatewaySessions(agentId: string): Promise<void> {
+    const payload = await this.request(agentId, 'sessions.list', {
+      limit: 20,
+      includeDerivedTitles: true,
+      includeLastMessage: true,
+    });
+
+    const threads = extractSessionThreads(agentId, payload);
+    threads.forEach(thread => this.emit({ type: 'thread_updated', thread }));
   }
 
   async sendMessage(agentId: string, threadId: string, text: string): Promise<void> {
