@@ -277,7 +277,11 @@ export class OpenClawGatewayTransport implements AgentTransport {
   }
 
   async resolveApproval(): Promise<void> {
-    throw new Error('OpenClaw Gateway approval resolution is not implemented yet');
+    this.emit({
+      type: 'transport_notice',
+      level: 'warning',
+      message: 'OpenClaw Gateway approval resolution is not implemented yet',
+    });
   }
 
   async createThread(agentId: string, title?: string): Promise<Thread> {
