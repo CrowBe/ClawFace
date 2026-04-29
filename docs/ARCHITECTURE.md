@@ -123,20 +123,22 @@ Current repo shape:
 
 - Expo app using Expo Router
 - Zustand store for app state
-- SecureStore for session keys
-- AsyncStorage-backed persistence for non-secret app state
-- WebSocket transport for paired agent communication
-- mock/dev WebSocket server for local testing
-- read-only OpenClaw Gateway discovery script for CF-025 path B protocol validation; no app transport integration yet
+- SecureStore for session keys and Gateway device tokens
+- AsyncStorage-backed persistence for non-secret app state with forward migrations
+- Legacy WebSocket transport for paired agent communication via bridge/mock server
+- OpenClaw Gateway transport (`services/transport/openclaw-gateway.ts`) implementing Gateway Protocol v3 `connect` handshake, `sessions.send`, `sessions.messages.subscribe`, and `sessions.create` as an `operator` role client
+- Gateway event normalization (`services/transport/normalize.ts`) for `session.message`, `chat`, and `session.tool` event families; unsupported `agent` streams surface as transport notices
+- Read-only Gateway discovery script (`scripts/openclaw-gateway-discover.js`) for protocol validation
+- Mock/dev WebSocket server and OpenClaw CLI bridge for local testing
 - Expo Notifications integration
-- production Android cleartext traffic disabled, with explicit development opt-in
+- Production Android cleartext traffic disabled, with explicit development opt-in
 
 Important current boundary:
 
-- ClawFace is currently a mobile client plus local mock/dev server.
-- OpenClaw Gateway path B is at discovery/profile stage only: ClawFace can probe the Gateway as an operator client, but the app has not yet switched its runtime transport from the legacy bridge/mock protocol.
+- ClawFace is currently a mobile client with two transport paths: legacy bridge/mock (path A) and OpenClaw Gateway (path B, in progress).
+- The Gateway transport implementation covers connect, send, subscribe, and thread creation. Remaining work includes mobile device signing, Gateway-side device token revocation, approval resolution wiring, and end-to-end validation against a real local OpenClaw gateway (CF-026 remaining acceptance criteria; CF-016 path B).
 - There is no production hosted relay/control plane yet.
-- The persisted agent model has an explicit `mode: 'direct' | 'relay'` field plus optional `relayUrl`; direct mode is the implemented/local path.
+- The persisted agent model has an explicit `mode: 'direct' | 'relay'` field, optional `relayUrl`, and `transport: 'legacy-websocket' | 'openclaw-gateway'`; direct mode with either transport is the implemented/local path.
 - Relay transport is not implemented yet. Relay-mode agents currently fall back to the existing WebSocket transport with a warning until the hosted relay/control plane exists.
 - Hosted architecture described here is the target shape for future work, not shipped behaviour.
 
