@@ -578,11 +578,11 @@ The scope is the smallest possible loop that satisfies `docs/PRODUCT_CONTEXT.md`
 #### Acceptance criteria
 
 - [ ] Run the full M1 manual test path against a real local OpenClaw via at least one of path A (bridge, hardened by CF-023) or path B (ClawFace as an operator client of the OpenClaw Gateway Protocol, CF-026). Not only the mock dev server, and not only the bridge fallback adapter.
-- [ ] `README.md` has a "M1 local test path" section covering at minimum path A with the exact commands for starting the bridge and Expo app, in order, with required env vars (`CLAWFACE_REPO_PATH`, `OPENCLAW_BIN`, `OPENCLAW_SESSION_ID`, `OPENCLAW_THREAD_ID`, `CLAWFACE_ALLOW_CLEARTEXT`) and their defaults
-- [ ] If path B was used, `README.md` documents the path B run instructions (point ClawFace at a running `openclaw gateway`, complete the operator pairing handshake, exercise the M1 round-trip)
-- [ ] `README.md` documents what the maintainer should see at each step: pairing succeeds, paired Trusted Agent shows Agent Context derived from OpenClaw (`hello-ok.snapshot` / `presence` for path B; bridge stdout for path A), the bound Thread shows repo/session metadata, sent message produces an OpenClaw response in the same Thread, transport logs confirm the response came from real OpenClaw (no fallback / no echo)
-- [ ] `README.md` documents how to tell a real OpenClaw turn apart from a bridge-fallback turn (per CF-023)
-- [ ] `README.md` documents known limitations and sharp edges honestly (e.g. approvals not bridged, only one bound thread per bridge instance, default session id assumes `agent:main:main`)
+- [x] `README.md` has a "M1 local test path" section covering at minimum path A with the exact commands for starting the bridge and Expo app, in order, with required env vars (`CLAWFACE_REPO_PATH`, `OPENCLAW_BIN`, `OPENCLAW_SESSION_ID`, `OPENCLAW_THREAD_ID`, `CLAWFACE_ALLOW_CLEARTEXT`) and their defaults
+- [x] If path B was used, `README.md` documents the path B run instructions (point ClawFace at a running `openclaw gateway`, complete the operator pairing handshake, exercise the M1 round-trip)
+- [x] `README.md` documents what the maintainer should see at each step: pairing succeeds, paired Trusted Agent shows Agent Context derived from OpenClaw (`hello-ok.snapshot` / `presence` for path B; bridge stdout for path A), the bound Thread shows repo/session metadata, sent message produces an OpenClaw response in the same Thread, transport logs confirm the response came from real OpenClaw (no fallback / no echo)
+- [x] `README.md` documents how to tell a real OpenClaw turn apart from a bridge-fallback turn (per CF-023)
+- [x] `README.md` documents known limitations and sharp edges honestly (e.g. approvals not bridged, only one bound thread per bridge instance, default session id assumes `agent:main:main`)
 - [ ] Wire-protocol problems uncovered during the M1 validation are filed back as ClawFace issues / `docs/PROTOCOL.md` amendments before declaring M1 reachable
 - [ ] Ping the maintainer with concise test instructions once the M1 path is validated
 
@@ -601,7 +601,6 @@ Manual only: execute the documented instructions from a clean start (no prior pa
 
 **Status:** DONE
 **Priority:** P0
-**Milestone:** M1
 **Epic:** F - OpenClaw Local MVP
 **Blocked by:** CF-014
 
