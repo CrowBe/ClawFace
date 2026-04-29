@@ -196,6 +196,13 @@ function normalizeGatewayAgentEvent(payload: unknown): TransportNormalizationRes
   if (!isString(payload.runId) || !isNumber(payload.seq) || !isString(payload.stream) || !isNumber(payload.ts)) {
     return malformed('agent', 'Gateway agent event requires runId, seq, stream, and ts');
   }
+  if (!isString(payload.sessionKey)) {
+    return malformed('agent', 'Gateway agent event requires sessionKey for ClawFace thread routing');
+  }
+
+  if (payload.stream === 'assistant') return normalizeGatewayAgentAssistant(payload);
+  if (payload.stream === 'tool') return normalizeGatewayAgentTool(payload);
+  if (payload.stream === 'command_output') return normalizeGatewayAgentCommandOutput(payload);
 
   return {
     controls: [],
@@ -208,6 +215,80 @@ function normalizeGatewayAgentEvent(payload: unknown): TransportNormalizationRes
   };
 }
 
+function normalizeGatewayAgentAssistant(payload: Record<string, unknown>): TransportNormalizationResult {
+  if (!isObject(payload.data)) return malformed('agent', 'Gateway assistant agent stream requires data');
+
+  const text = extractText(payload.data);
+  if (!text) return malformed('agent', 'Gateway assistant agent stream requires text content');
+
+  return {
+    controls: [],
+    issues: [],
+    events: [{
+      type: 'message_upserted',
+      threadId: payload.sessionKey as string,
+      message: {
+        id: stableNumericId(`${payload.sessionKey}|${payload.runId}|assistant`),
+        role: 'agent',
+        text,
+        t: 'now',
+      },
+    }],
+  };
+}
+
+function normalizeGatewayAgentTool(payload: Record<string, unknown>): TransportNormalizationResult {
+  if (!isObject(payload.data)) return malformed('agent', 'Gateway tool agent stream requires data');
+  if (!isString(payload.data.toolCallId) || !isString(payload.data.phase)) {
+    return malformed('agent', 'Gateway tool agent stream requires toolCallId and phase');
+  }
+
+  const phase = payload.data.phase;
+  const status = phase === 'start' || phase === 'update'
+    ? 'running'
+    : phase === 'result'
+      ? (payload.data.isError ? 'failed' : 'done')
+      : undefined;
+  if (!status) return malformed('agent', `Unsupported Gateway tool agent stream phase: ${phase}`);
+
+  const message: Message = {
+    id: stableNumericId(`${payload.sessionKey}|${payload.data.toolCallId}`),
+    role: 'tool',
+    name: isString(payload.data.name) ? payload.data.name : 'tool',
+    arg: stringifyToolValue(payload.data.args),
+    status,
+    result: stringifyToolValue(payload.data.result ?? payload.data.partialResult),
+    t: 'now',
+  };
+
+  return {
+    controls: [],
+    issues: [],
+    events: [{ type: 'message_upserted', threadId: payload.sessionKey as string, message }],
+  };
+}
+
+function normalizeGatewayAgentCommandOutput(payload: Record<string, unknown>): TransportNormalizationResult {
+  if (!isObject(payload.data)) return malformed('agent', 'Gateway command_output agent stream requires data');
+  if (!isString(payload.data.toolCallId)) {
+    return malformed('agent', 'Gateway command_output agent stream requires toolCallId');
+  }
+
+  const message: Message = {
+    id: stableNumericId(`${payload.sessionKey}|${payload.data.toolCallId}`),
+    role: 'tool',
+    name: isString(payload.data.name) ? payload.data.name : 'command',
+    status: payload.data.status === 'failed' ? 'failed' : 'running',
+    result: stringifyToolValue(payload.data.output ?? payload.data.progressText),
+    t: 'now',
+  };
+
+  return {
+    controls: [],
+    issues: [],
+    events: [{ type: 'message_upserted', threadId: payload.sessionKey as string, message }],
+  };
+}
 
 function stringifyToolValue(value: unknown): string | undefined {
   if (value == null) return undefined;
