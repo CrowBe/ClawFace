@@ -11,10 +11,12 @@ const { execFile } = require('child_process');
 
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 8766;
 const REPO_PATH = path.resolve(process.env.CLAWFACE_REPO_PATH || process.cwd());
-const SESSION_ID = process.env.OPENCLAW_SESSION_ID || 'agent:main:main';
+const SESSION_ID = process.env.OPENCLAW_SESSION_ID || 'main';
 const THREAD_ID = process.env.OPENCLAW_THREAD_ID || SESSION_ID;
 // CF-023: bridge CLI is configurable so the M1 path is honest about which
-// `openclaw` build it is targeting. Defaults match
+// `openclaw` build it is targeting. OPENCLAW_SESSION_ID maps to the
+// CLI's --session-id value, which must be a safe session id such as `main`,
+// not a Gateway session key such as `agent:main:main`. Defaults match
 // https://docs.openclaw.ai/tools/agent-send and force the local embedded
 // runtime so first-run does not silently rely on a Gateway.
 const OPENCLAW_BIN = process.env.OPENCLAW_BIN || 'openclaw';

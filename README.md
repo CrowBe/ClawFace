@@ -75,8 +75,8 @@ Use this checklist from a clean start when validating CF-016. Path B is the reco
    ```bash
    CLAWFACE_REPO_PATH=$PWD \
    OPENCLAW_BIN=openclaw \
-   OPENCLAW_SESSION_ID=agent:main:main \
-   OPENCLAW_THREAD_ID=agent:main:main \
+   OPENCLAW_SESSION_ID=main \
+   OPENCLAW_THREAD_ID=main \
    OPENCLAW_AGENT_ARGS="--local --timeout 120" \
    OPENCLAW_TURN_TIMEOUT_MS=130000 \
    npm run bridge:openclaw
@@ -155,8 +155,8 @@ It binds ClawFace to one explicit local OpenClaw target: repo path, branch, Open
 
 ```bash
 # from this repo
-OPENCLAW_SESSION_ID=agent:main:main \
-OPENCLAW_THREAD_ID=agent:main:main \
+OPENCLAW_SESSION_ID=main \
+OPENCLAW_THREAD_ID=main \
 npm run bridge:openclaw
 ```
 
@@ -164,7 +164,7 @@ Optional environment variables:
 
 - `PORT` (default `8766`)
 - `CLAWFACE_REPO_PATH` (default current directory)
-- `OPENCLAW_SESSION_ID` / `OPENCLAW_THREAD_ID` (defaults `agent:main:main`) — OpenClaw session keys use the format `agent:<agentName>:<sessionLabel>`. The default targets the default `main` agent's `main` session, matching `openclaw`'s out-of-the-box configuration. If your `openclaw.json` uses a non-default agent name (`openclaw agent --agent ops ...`), set `OPENCLAW_SESSION_ID=agent:ops:main` etc. See https://docs.openclaw.ai for canonical OpenClaw session-key behaviour.
+- `OPENCLAW_SESSION_ID` / `OPENCLAW_THREAD_ID` (defaults `main`) — path A passes `OPENCLAW_SESSION_ID` to `openclaw agent --session-id`, so it must be a safe CLI session id such as `main` or `clawface-m1`, not a Gateway session key like `agent:main:main`. Use `OPENCLAW_AGENT_ARGS` / `OPENCLAW_BIN` for CLI behavior overrides; Gateway session keys belong to path B.
 - `OPENCLAW_BIN` (default `openclaw`) — path to the `openclaw` binary the bridge shells out to. Override if the binary is not on `PATH` or if you want to point at a specific build.
 - `OPENCLAW_AGENT_ARGS` (default `--local --timeout 120`) — extra args appended after `--session-id … --message … --json`. The default forces the local embedded runtime so the bridge does not silently rely on an OpenClaw Gateway. Override if you need different OpenClaw flags (e.g. `--verbose on`, `--thinking medium`).
 - `OPENCLAW_TURN_TIMEOUT_MS` (default `130000`) — wall-clock timeout for the bridge process supervising one `openclaw agent` invocation.
