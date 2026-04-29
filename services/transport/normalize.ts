@@ -208,6 +208,52 @@ function normalizeGatewayAgentEvent(payload: unknown): TransportNormalizationRes
   };
 }
 
+
+function stringifyToolValue(value: unknown): string | undefined {
+  if (value == null) return undefined;
+  if (isString(value)) return value;
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return undefined;
+  }
+}
+
+function normalizeGatewaySessionTool(payload: unknown): TransportNormalizationResult {
+  if (!isObject(payload)) return malformed('session.tool', 'Gateway session.tool event requires an object payload');
+  if (!isString(payload.sessionKey) || !isObject(payload.data)) {
+    return malformed('session.tool', 'Gateway session.tool event requires sessionKey and data');
+  }
+  if (!isString(payload.data.toolCallId) || !isString(payload.data.phase)) {
+    return malformed('session.tool', 'Gateway session.tool data requires toolCallId and phase');
+  }
+
+  const phase = payload.data.phase;
+  const status = phase === 'start' || phase === 'update'
+    ? 'running'
+    : phase === 'result'
+      ? (payload.data.isError ? 'failed' : 'done')
+      : undefined;
+  if (!status) return malformed('session.tool', `Unsupported Gateway session.tool phase: ${phase}`);
+
+  const result = stringifyToolValue(payload.data.result ?? payload.data.partialResult);
+  const message: Message = {
+    id: stableNumericId(`${payload.sessionKey}|${payload.data.toolCallId}`),
+    role: 'tool',
+    name: isString(payload.data.name) ? payload.data.name : 'tool',
+    arg: stringifyToolValue(payload.data.args),
+    status,
+    result,
+    t: 'now',
+  };
+
+  return {
+    controls: [],
+    issues: [],
+    events: [{ type: 'message_upserted', threadId: payload.sessionKey, message }],
+  };
+}
+
 function isMessage(value: unknown): value is Message {
   if (!isObject(value)) return false;
   if (!isNumber(value.id)) return false;
@@ -363,6 +409,8 @@ export class GatewayTransportEventNormalizer {
           return normalizeGatewayAgentEvent(raw.payload);
         case 'session.message':
           return normalizeGatewaySessionMessage(raw.payload);
+        case 'session.tool':
+          return normalizeGatewaySessionTool(raw.payload);
         case 'heartbeat':
         case 'tick':
         case 'presence':
