@@ -3,6 +3,7 @@
 Status: Draft
 Created: 2026-04-27
 Updated: 2026-04-29
+Play Store and encryption analysis: 2026-04-29
 
 This is the canonical product architecture document for ClawFace. If another document describes product surfaces, trust boundaries, relay responsibilities, approval safety, or hosted-vs-local responsibilities, it should defer to this file instead of repeating architecture decisions.
 
@@ -254,6 +255,36 @@ The hosted control plane should avoid storing by default:
 
 If transcript sync or history backup is ever added, it must be treated as a separate encrypted-content feature with explicit architecture, pricing, retention, and user-consent implications.
 
+### End-to-end encryption for relay mode
+
+When ClawFace routes messages through the hosted relay, message payloads should be encrypted end-to-end so the relay infrastructure handles only opaque blobs. The relay routes by metadata; it never reads message content.
+
+Encryption strategy:
+
+1. **Key agreement during pairing.** ClawFace and the paired agent already establish a cryptographic trust anchor via Ed25519 device identity and signed-challenge handshake. Convert the Ed25519 keypair to X25519 (Curve25519 ECDH) to derive a shared symmetric key. This reuses the existing pairing identity without introducing a separate key-exchange flow.
+
+2. **Per-message envelope encryption.** Before sending through the relay, encrypt the message payload with the shared key using XChaCha20-Poly1305 (authenticated encryption with a random 192-bit nonce per message). The relay frame carries: routing metadata (agent ID, thread ID, direction, timestamp, message type) + encrypted payload blob + nonce.
+
+3. **Relay sees only routing metadata.** The relay reads enough to route (which agent, which thread, which direction) and enforces plan quotas/rate limits, but cannot decrypt message content. Push notification payloads carry only route hints (agent ID, event type), never message text.
+
+4. **Library fit.** `@noble/ed25519` (already a dependency) and `@noble/ciphers` (same author, pure JS, no native modules) provide Ed25519↔X25519 conversion and XChaCha20-Poly1305. No native crypto module required.
+
+What the relay can see by design:
+
+- connection presence (who is online)
+- message routing metadata (agent ID, thread ID, direction, timestamp)
+- message size (padding can mitigate)
+- notification routing hints (not notification content)
+
+What the relay cannot see:
+
+- message text content
+- tool arguments, code, or command output
+- approval request details or secrets
+- prompts or agent responses
+
+Forward secrecy (Double Ratchet) is a future enhancement if demand justifies the complexity. The envelope encryption approach above is a practical first step that satisfies guardrail 3 and makes the trust boundary enforceable.
+
 ---
 
 ## 6. Architectural Guardrails
@@ -304,4 +335,7 @@ Hosted mode should launch as a control-plane/relay product, not as transcript ho
 9. Add Bonjour/mDNS browsing for LAN auto-discovery of OpenClaw Gateways.
 10. Accept OpenClaw bootstrap token format alongside ClawFace's interim pairing payload.
 
-The senior-looking work is the protocol, trust boundary, revocation model, replay-safe approvals, and cost-aware relay design — not rushing cloud features.
+11. Design and implement E2E envelope encryption for relay-mode payloads (see §5 "End-to-end encryption for relay mode").
+12. Prepare Google Play Store deployment: EAS Build production profile, Privacy Policy, Data Safety declaration, store listing assets.
+
+The senior-looking work is the protocol, trust boundary, revocation model, replay-safe approvals, E2E encryption for the relay, and cost-aware relay design — not rushing cloud features.

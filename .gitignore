@@ -1,1 +1,4 @@
 node_modules/
+
+# EAS Build — Google Service Account key (secret, do not commit)
+google-service-account.json

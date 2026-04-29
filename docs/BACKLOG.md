@@ -1163,7 +1163,145 @@ Manual:
 
 ---
 
+## Epic I — Google Play Store Readiness
+
+> These issues track the work required to ship ClawFace to the Google Play Store and establish the monetisation foundation. The app itself ships as a free download; paid features are unlocked by web-owned entitlements.
+
+---
+
+### CF-028 — Google Play Store deployment preparation
+
+**Status:** TODO
+**Priority:** P1
+**Milestone:** Post-M1
+**Epic:** I — Google Play Store Readiness
+**Blocked by:** CF-016
+
+#### Description
+
+Prepare ClawFace for production deployment to the Google Play Store. The app ships as a free download. This issue covers the build, listing, and compliance work required to pass Play Console review.
+
+#### Acceptance criteria
+
+- [ ] `eas.json` configured with `development`, `preview`, and `production` build profiles (production outputs `.aab`)
+- [ ] Google Play Developer Account created ($25 one-time)
+- [ ] Google Service Account created and key stored for EAS Submit automation
+- [ ] Production build succeeds via `eas build --platform android --profile production`
+- [ ] Privacy Policy hosted at a public URL (draft at `docs/PRIVACY_POLICY.md`)
+- [ ] Data Safety form completed in Play Console. ClawFace can truthfully declare: most data on-device only, session keys in platform-secure storage, no third-party data sharing, data deletion via unpair/sign-out
+- [ ] Content rating questionnaire (IARC) completed
+- [ ] Store listing: app icon (512×512), feature graphic (1024×500), at least 2 device screenshots, short description, full description
+- [ ] Target API level ≥ 35 (Android 15) confirmed in production build
+- [ ] 16KB page size support confirmed (Expo 54 / RN 0.81 should handle this)
+- [ ] Internal testing track deployed and validated before public release
+
+#### Test plan
+
+Manual:
+1. Build production AAB with `eas build --platform android --profile production`.
+2. Upload to Play Console internal testing track.
+3. Install from internal testing and verify pairing, messaging, and unpair flows work.
+4. Verify Data Safety section renders correctly on the store listing preview.
+
+#### Files
+
+- `eas.json`
+- `docs/PRIVACY_POLICY.md`
+- `app.json` (verify `android.package`, `versionCode`, target SDK)
+
+---
+
+### CF-029 — E2E envelope encryption for relay-mode payloads
+
+**Status:** TODO
+**Priority:** P1
+**Milestone:** Post-M1
+**Epic:** I — Google Play Store Readiness
+**Blocked by:** CF-026
+
+> Architecture documented in `docs/ARCHITECTURE.md` §5 "End-to-end encryption for relay mode". This issue implements the encryption layer before the hosted relay launches as a paid feature.
+
+#### Description
+
+Add end-to-end envelope encryption so that when ClawFace routes messages through the hosted relay, the relay infrastructure handles only opaque encrypted blobs. The relay routes by metadata; it never reads message content, code, prompts, tool outputs, or secrets.
+
+#### Acceptance criteria
+
+- [ ] Add `@noble/ciphers` dependency (same author as `@noble/ed25519`, pure JS, no native modules)
+- [ ] Implement Ed25519→X25519 key conversion using the existing per-agent Ed25519 identity seed in SecureStore
+- [ ] Implement X25519 ECDH key agreement during pairing to derive a shared symmetric key between phone and agent
+- [ ] Store the derived shared key in SecureStore alongside the existing agent credentials
+- [ ] Implement XChaCha20-Poly1305 per-message encryption: encrypt payload before relay send, decrypt after relay receive
+- [ ] Relay frame format carries: routing metadata (agent ID, thread ID, direction, timestamp, message type) + encrypted payload blob + nonce
+- [ ] Encryption is applied only in relay mode; direct/local mode continues to use TLS-only transport
+- [ ] Existing direct-mode transport behaviour is unchanged
+- [ ] `docs/PROTOCOL.md` updated with encrypted envelope frame format for relay mode
+- [ ] `docs/ARCHITECTURE.md` §5 updated to reflect implementation status
+
+#### Test plan
+
+```bash
+npx tsc --noEmit
+```
+
+Unit/integration:
+1. Generate two Ed25519 keypairs, convert to X25519, derive shared key, encrypt a message with one side, decrypt with the other.
+2. Verify that encrypted payloads round-trip correctly through a mock relay that only touches routing metadata.
+3. Verify that tampered ciphertext is rejected (Poly1305 authentication check).
+
+#### Files
+
+- `services/crypto/envelope.ts` (new — encryption/decryption module)
+- `services/secureStore.ts` (store shared symmetric key)
+- `services/transport/` (integrate encryption for relay-mode sends/receives)
+- `docs/PROTOCOL.md`
+- `docs/ARCHITECTURE.md`
+- `package.json` (add `@noble/ciphers`)
+
+---
+
+### CF-030 — Web billing portal and entitlement API
+
+**Status:** TODO
+**Priority:** P2
+**Milestone:** Post-M1
+**Epic:** I — Google Play Store Readiness
+**Blocked by:** CF-028
+
+> Economics documented in `docs/SCALING_AND_UNIT_ECONOMICS.md` §3.1. This issue implements web-owned billing so the app ships as a free download with no in-app purchase flow, avoiding Google Play transaction fees.
+
+#### Description
+
+Build a web billing portal for Pro/Team subscriptions and an entitlement API the mobile app can query. The app checks entitlements at launch and on-demand; all subscription management happens on the web. This is the billing strategy recommended in `docs/SCALING_AND_UNIT_ECONOMICS.md` §3.1.
+
+#### Acceptance criteria
+
+- [ ] Web billing portal accepting Stripe subscriptions for Pro and Team tiers
+- [ ] Entitlement API endpoint: given an account token, returns current plan tier, quota limits, and feature flags
+- [ ] Mobile app queries entitlement API at launch and caches result locally
+- [ ] Pro/Team features (relay access, multiple agents, push notifications) gated by entitlement state
+- [ ] Free tier works fully without any entitlement check (local pairing, basic messaging)
+- [ ] No in-app purchase flow or Play Billing Library integration in the mobile app
+- [ ] `docs/SCALING_AND_UNIT_ECONOMICS.md` updated with implemented billing architecture
+
+#### Test plan
+
+1. Create a test Stripe subscription and verify entitlement API returns Pro tier.
+2. Verify mobile app unlocks Pro features after querying the entitlement API.
+3. Cancel subscription and verify entitlement API returns Free tier; app gates features accordingly.
+
+#### Files
+
+- Web billing portal (separate repo or hosted service)
+- Entitlement API (separate repo or hosted service)
+- Mobile app: entitlement query service, feature gating logic
+- `docs/SCALING_AND_UNIT_ECONOMICS.md`
+
+---
+
 ## Issue index
+
+> Note: CF-030 (web billing portal) lives outside the ClawFace mobile repo per non-goals 1 and 2. It is tracked here for backlog completeness but implementation belongs to a separate service repository.
 
 | Key | Title | Milestone | Priority | Status | Blocked by |
 |---|---|---|---|---|---|
@@ -1194,3 +1332,6 @@ Manual:
 | CF-025 | Gateway Protocol profile and discovery probe | M1 | P1 | DONE | CF-001, CF-014 |
 | CF-026 | OpenClaw Gateway transport implementation (M1 path B) | M1 | P1 | IN_PROGRESS | CF-025 |
 | CF-027 | Transport investigation follow-ups: Bonjour discovery, bootstrap token, policy limits | Post-M1 | P2 | TODO | CF-026 |
+| CF-028 | Google Play Store deployment preparation | Post-M1 | P1 | TODO | CF-016 |
+| CF-029 | E2E envelope encryption for relay-mode payloads | Post-M1 | P1 | TODO | CF-026 |
+| CF-030 | Web billing portal and entitlement API | Post-M1 | P2 | TODO | CF-028 |
