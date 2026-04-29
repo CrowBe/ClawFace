@@ -32,7 +32,7 @@ const CLIENT_DISPLAY_NAME = 'ClawFace Mobile';
 const CLIENT_VERSION = 'cf-026-gateway-transport';
 const CLIENT_MODE = 'probe';
 const ROLE = 'operator';
-const DEFAULT_SCOPES = ['operator.read', 'operator.write'];
+const DEFAULT_SCOPES = ['operator.read', 'operator.write', 'operator.pairing'];
 
 function makeId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -68,6 +68,7 @@ export class OpenClawGatewayTransport implements AgentTransport {
   private pending = new Map<string, Map<string, PendingRequest>>();
   private normalizers = new Map<string, GatewayTransportEventNormalizer>();
   private options = new Map<string, GatewayConnectOptions>();
+  private deviceIds = new Map<string, string>();
   private subscribedThreads = new Map<string, Set<string>>();
 
   subscribe(listener: TransportListener): () => void {
@@ -116,6 +117,7 @@ export class OpenClawGatewayTransport implements AgentTransport {
             const storedDeviceToken = await getGatewayDeviceToken(agent.id).catch(() => null);
             const token = opts.token ?? storedDeviceToken ?? agent.sessionKey;
             const device = await opts.device?.(challenge);
+            if (device?.id) this.deviceIds.set(agent.id, device.id);
             ws.send(JSON.stringify({
               type: 'req',
               id: 'connect-1',
@@ -237,13 +239,35 @@ export class OpenClawGatewayTransport implements AgentTransport {
     this.subscribedThreads.delete(agentId);
     this.agents.delete(agentId);
     this.options.delete(agentId);
+    this.deviceIds.delete(agentId);
     this.states.set(agentId, 'disconnected');
     this.emit({ type: 'connection_changed', agentId, online: false });
   }
 
   async revoke(agentId: string): Promise<void> {
-    // Exact Gateway self-revocation RPC is still being validated; clear the
-    // local credential now so reconnect cannot silently reuse it.
+    const deviceId = this.deviceIds.get(agentId);
+    const ws = this.sockets.get(agentId);
+
+    if (deviceId && ws?.readyState === WebSocket.OPEN) {
+      try {
+        await this.request(agentId, 'device.token.revoke', { deviceId, role: ROLE });
+      } catch (err) {
+        this.emit({
+          type: 'transport_notice',
+          level: 'warning',
+          message: err instanceof Error
+            ? `Could not revoke Gateway device token remotely: ${err.message}`
+            : 'Could not revoke Gateway device token remotely',
+        });
+      }
+    } else {
+      this.emit({
+        type: 'transport_notice',
+        level: 'warning',
+        message: 'Gateway device token removed locally; remote revocation needs a connected signed device identity',
+      });
+    }
+
     await deleteGatewayDeviceToken(agentId).catch(() => {});
     this.disconnect(agentId);
   }

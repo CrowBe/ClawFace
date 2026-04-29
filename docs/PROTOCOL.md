@@ -81,7 +81,7 @@ Minimum desired scopes by ClawFace surface:
 
 The discovery script requests `operator.read` only. The app transport requests `operator.read,operator.write` by default. `operator.admin` is not required for the M1 command surface and should not be a default.
 
-The discovery script defaults to `operator.read`. Set `OPENCLAW_GATEWAY_PRINT_FULL_FEATURES=1` to print the full advertised method/event list, or `OPENCLAW_GATEWAY_SCOPES=operator.read,operator.write,operator.approvals` to inspect a broader scope set without sending write probes. The app transport defaults to `operator.read,operator.write`.
+The discovery script defaults to `operator.read`. Set `OPENCLAW_GATEWAY_PRINT_FULL_FEATURES=1` to print the full advertised method/event list, or `OPENCLAW_GATEWAY_SCOPES=operator.read,operator.write,operator.pairing,operator.approvals` to inspect a broader scope set without sending write probes. The app transport defaults to `operator.read,operator.write,operator.pairing` so it can self-revoke paired device tokens when a signed device identity is available.
 
 The first app pairing bridge accepts a ClawFace QR/paste payload with `transport: "openclaw-gateway"`, `host`, `port`, optional `secure`, optional display `context`, and either `token` or `sessionKey` containing the Gateway-issued/approved operator credential. The app stores that credential as an OpenClaw Gateway device token in SecureStore and marks the paired agent as `transport: "openclaw-gateway"`. This is an interim local-M1 path until OpenClaw exposes a mobile-oriented QR/pairing helper; it must not become a separate ClawFace auth protocol.
 
@@ -100,7 +100,7 @@ Known candidates from local OpenClaw docs and generated Gateway schema declarati
 | Lower-level chat send/history | `chat.history`, `chat.send`, `chat.abort` | `chat.history` takes `{ sessionKey, limit?, maxChars? }`. `chat.send` takes `{ sessionKey, message, thinking?, deliver?, attachments?, timeoutMs?, idempotencyKey }` and additional provenance/origin fields that require admin scope; ClawFace should avoid those fields. |
 | Steer/abort active work | `sessions.steer`, `sessions.abort`, `chat.abort` | Post-M1 unless the single-thread loop needs abort. Use opaque session key and Gateway-provided run id. |
 | Resolve approvals | `exec.approval.resolve`, `plugin.approval.resolve` | Requires `operator.approvals`; payloads are OpenClaw-owned and Post-M1 unless surfaced during M1 testing. |
-| Revoke stored device token | `device.token.revoke` or related device-pairing method | Requires `operator.pairing`; exact self-revocation flow must be confirmed before app integration. |
+| Revoke stored device token | `device.token.revoke` | Requires `operator.pairing`; ClawFace calls it with `{ deviceId, role: "operator" }` when a connected signed device identity is available, then clears the local SecureStore token. Interim token-only pairing falls back to local deletion with a warning. |
 
 The app transport binds to `sessions.*` first. Before sending a user turn, `OpenClawGatewayTransport` best-effort subscribes to `sessions.messages.subscribe` for the full opaque Thread/session key, then calls `sessions.send` with an idempotency key. Subscription failure is surfaced as a transport notice and does not prevent the send. `chat.*` remains useful for history and lower-level compatibility, but it exposes provenance/origin fields that are not part of the default mobile command surface.
 
