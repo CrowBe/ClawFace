@@ -88,9 +88,7 @@ Minimum desired scopes by ClawFace surface:
 | Access secret-bearing `talk.config` | `operator.talk.secrets` (not needed for M1 command surface) |
 | Gateway/runtime administration | `operator.admin` — not part of M1; avoid by default |
 
-The discovery script requests `operator.read` only. The app transport requests `operator.read,operator.write` by default. `operator.admin` is not required for the M1 command surface and should not be a default.
-
-The discovery script defaults to `operator.read`. Set `OPENCLAW_GATEWAY_PRINT_FULL_FEATURES=1` to print the full advertised method/event list, or `OPENCLAW_GATEWAY_SCOPES=operator.read,operator.write,operator.pairing,operator.approvals` to inspect a broader scope set without sending write probes. The app transport defaults to `operator.read,operator.write,operator.pairing` so it can self-revoke paired device tokens when a signed device identity is available.
+The discovery script defaults to `operator.read`. Set `OPENCLAW_GATEWAY_PRINT_FULL_FEATURES=1` to print the full advertised method/event list, or `OPENCLAW_GATEWAY_SCOPES=operator.read,operator.write,operator.pairing,operator.approvals` to inspect a broader scope set without sending write probes. The app transport defaults to `operator.read,operator.write,operator.pairing` so it can self-revoke paired device tokens when a signed device identity is available. `operator.admin` is not required for the M1 command surface and should not be a default.
 
 Plugin-registered gateway RPC methods may request their own operator scope, but reserved core admin prefixes (`config.*`, `exec.approvals.*`, `wizard.*`, `update.*`) always resolve to `operator.admin`. Some slash commands reached through `chat.send` apply stricter command-level checks on top (e.g. persistent `/config set` writes require `operator.admin`).
 

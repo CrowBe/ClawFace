@@ -79,7 +79,7 @@ npm run gateway:discover
 
 Known path B limitations:
 
-- Gateway approval resolution is not yet wired (approvals are Post-M1; see CF-015).
+- Gateway approval resolution currently surfaces a transport notice only; full approval bridging is Post-M1 (see CF-015).
 - Mobile device identity/signature support is not yet wired; the current local-M1 path relies on a Gateway-accepted token/device token.
 - Device token revocation calls `device.token.revoke` only when a connected signed device identity is available; interim token-only pairing falls back to local credential deletion with a warning.
 - End-to-end validation against a real local Gateway is tracked by CF-016 path B.
