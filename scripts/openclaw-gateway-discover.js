@@ -26,6 +26,7 @@ const SCOPES = (process.env.OPENCLAW_GATEWAY_SCOPES || '')
   .filter(Boolean);
 if (SCOPES.length === 0) SCOPES.push(...DEFAULT_SCOPES);
 const PRINT_FULL_FEATURES = process.env.OPENCLAW_GATEWAY_PRINT_FULL_FEATURES === '1';
+const REVOKE_DEVICE_TOKEN = process.env.OPENCLAW_GATEWAY_REVOKE_DEVICE_TOKEN === '1';
 const SEND_TEXT = process.env.OPENCLAW_GATEWAY_SEND_TEXT || '';
 const SEND_SESSION_KEY = process.env.OPENCLAW_GATEWAY_SEND_SESSION_KEY || '';
 const ROUND_TRIP_CAPTURE_MS = process.env.OPENCLAW_GATEWAY_ROUND_TRIP_CAPTURE_MS
@@ -331,7 +332,7 @@ function createGatewayClient() {
     return () => eventListeners.delete(listener);
   }
 
-  return { ws, connectPromise, request, onEvent };
+  return { ws, connectPromise, request, onEvent, device };
 }
 
 async function main() {
@@ -372,6 +373,19 @@ async function main() {
     }
   } else {
     console.log('- sessions.preview: skipped (not advertised)');
+  }
+
+  if (REVOKE_DEVICE_TOKEN) {
+    if (!methods.has('device.token.revoke')) {
+      console.log('- device.token.revoke: skipped (not advertised)');
+    } else {
+      try {
+        await client.request('device.token.revoke', { deviceId: client.device.deviceId, role: ROLE });
+        console.log('- device.token.revoke: ok');
+      } catch (err) {
+        console.log(`- device.token.revoke: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
   }
 
   if (SEND_TEXT) {

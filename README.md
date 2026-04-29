@@ -88,6 +88,8 @@ OPENCLAW_GATEWAY_SEND_TEXT="Reply with one short sentence for ClawFace path B va
 npm run gateway:discover
 ```
 
+To validate Gateway token revocation for the probe's signed device identity, add `OPENCLAW_GATEWAY_REVOKE_DEVICE_TOKEN=1`. This calls `device.token.revoke` for the ephemeral probe device before closing.
+
 Known path B limitations:
 
 - Gateway approval resolution currently surfaces a transport notice only; full approval bridging is Post-M1 (see CF-015).
