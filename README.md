@@ -121,7 +121,7 @@ To pair ClawFace with a local Gateway, construct a pairing payload with `transpo
 
 The `token` field is optional. When present, it should contain a Gateway-accepted auth token (the same token used with `npm run gateway:discover`). When omitted, ClawFace attempts the signed Gateway device-pairing flow so OpenClaw can ask the operator to approve the mobile device. The optional `context` field populates Agent Context display in the app.
 
-Once paired, ClawFace stores any supplied Gateway credential, and any `hello-ok.auth.deviceToken` issued by the Gateway, in SecureStore and routes communication through the Gateway transport. Streamed Gateway events (`session.message`, `chat`, `session.tool`) are normalized into ClawFace's message model; unsupported `agent` streams surface as controlled notices until exact stream mappings are added.
+Once paired, ClawFace stores any supplied Gateway credential, and any `hello-ok.auth.deviceToken` issued by the Gateway, in SecureStore and routes communication through the Gateway transport. Streamed Gateway events (`session.message`, `chat`, `session.tool`, and session-keyed `agent` assistant/tool/command-output streams) are normalized into ClawFace's message model; unknown or unkeyed `agent` streams surface as controlled notices.
 
 To validate Gateway connectivity before pairing:
 
@@ -147,7 +147,7 @@ Known path B limitations:
 
 - Gateway approval resolution currently surfaces a transport notice only; full approval bridging is Post-M1 (see CF-015).
 - Device token revocation calls `device.token.revoke` only when a connected signed device identity is available; interim token-only pairing falls back to local credential deletion with a warning.
-- End-to-end validation against a real local Gateway is tracked by CF-016 path B.
+- Authenticated Gateway discovery, send, event capture, and signed-device token revocation probes have passed locally. Full mobile-app path B validation remains tracked by CF-026.
 
 ### OpenClaw local bridge (path A)
 
