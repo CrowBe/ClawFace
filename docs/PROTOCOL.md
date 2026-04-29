@@ -63,9 +63,9 @@ Baseline connect intent:
 - `client.id`: an OpenClaw-accepted client id. The CF-025 discovery helper uses the built-in `openclaw-probe` id until OpenClaw exposes a first-class ClawFace/mobile operator id.
 - `client.mode`: an OpenClaw-accepted non-node mode. The discovery script and current app transport both use `probe`; this should migrate to a first-class ClawFace/mobile operator mode when OpenClaw adds one.
 - `auth.token`: shared Gateway token or previously-issued device token when available
-- `device`: signed device identity, including the challenge nonce, when required by Gateway auth mode
+- `device`: signed device identity, including the challenge nonce, when required by Gateway auth mode. This remains a CF-026 gap for the mobile app; current local-M1 pairing relies on a Gateway-accepted token/device token.
 
-The read-only discovery script (`scripts/openclaw-gateway-discover.js`) validates this handshake shape. The app transport (`services/transport/openclaw-gateway.ts`) implements the full handshake with device token persistence.
+The read-only discovery script (`scripts/openclaw-gateway-discover.js`) validates this handshake shape. The app transport (`services/transport/openclaw-gateway.ts`) implements challenge handling and token/device-token authentication with SecureStore persistence; mobile device signing remains to be wired.
 
 ### Scope set
 

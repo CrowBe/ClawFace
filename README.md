@@ -46,7 +46,7 @@ ClawFace has two paths for connecting to a local OpenClaw instance:
 
 ### OpenClaw Gateway (path B)
 
-ClawFace can connect directly to a running OpenClaw Gateway as an operator client. The app transport (`services/transport/openclaw-gateway.ts`) implements Gateway Protocol v3: `connect` handshake with signed challenge, `sessions.send` for user turns, `sessions.messages.subscribe` for streamed events, and `sessions.create` for new threads.
+ClawFace can connect directly to a running OpenClaw Gateway as an operator client. The app transport (`services/transport/openclaw-gateway.ts`) implements Gateway Protocol v3: `connect.challenge`/`connect` handling, token/device-token authentication, `sessions.send` for user turns, `sessions.messages.subscribe` for streamed events, and `sessions.create` for new threads. Mobile device signing is still a remaining CF-026 item.
 
 To pair ClawFace with a local Gateway, construct a pairing payload with `transport: "openclaw-gateway"` and paste it into the app's pair screen:
 
@@ -67,7 +67,7 @@ To pair ClawFace with a local Gateway, construct a pairing payload with `transpo
 
 The `token` field should contain a Gateway-accepted auth token (the same token used with `npm run gateway:discover`). The optional `context` field populates Agent Context display in the app.
 
-Once paired, ClawFace stores the device token in SecureStore and routes all communication through the Gateway transport. Streamed Gateway events (`session.message`, `chat`, `agent`, `session.tool`) are normalized into ClawFace's message model.
+Once paired, ClawFace stores the supplied Gateway credential, and any `hello-ok.auth.deviceToken` issued by the Gateway, in SecureStore and routes communication through the Gateway transport. Streamed Gateway events (`session.message`, `chat`, `session.tool`) are normalized into ClawFace's message model; unsupported `agent` streams surface as controlled notices until exact stream mappings are added.
 
 To validate Gateway connectivity before pairing:
 
@@ -80,6 +80,7 @@ npm run gateway:discover
 Known path B limitations:
 
 - Gateway approval resolution is not yet wired (approvals are Post-M1; see CF-015).
+- Mobile device identity/signature support is not yet wired; the current local-M1 path relies on a Gateway-accepted token/device token.
 - Device token revocation currently only clears the local credential; Gateway-side RPC revocation is not yet implemented.
 - End-to-end validation against a real local Gateway is tracked by CF-016 path B.
 
