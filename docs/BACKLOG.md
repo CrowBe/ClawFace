@@ -50,7 +50,7 @@ Per `docs/PRODUCT_CONTEXT.md`, **Approvals are explicitly out of scope for M1.**
 | CF-024 Document `OPENCLAW_SESSION_ID` and repo binding for first-run | DONE |
 | CF-025 Gateway Protocol profile and discovery probe | DONE |
 | CF-026 OpenClaw Gateway transport implementation (M1 path B) | IN_PROGRESS |
-| CF-016 M1 readiness check: boot ClawFace and connect to OpenClaw in a single thread | TODO |
+| CF-016 M1 readiness check: boot ClawFace and connect to OpenClaw in a single thread | DONE |
 
 CF-016 has two valid local validation paths and may be satisfied by either:
 
@@ -553,7 +553,7 @@ Manual:
 
 ### CF-016 - M1 readiness check: boot ClawFace and connect to OpenClaw in a single thread
 
-**Status:** TODO
+**Status:** DONE
 **Priority:** P0
 **Milestone:** M1
 **Epic:** F - OpenClaw Local MVP
@@ -577,14 +577,14 @@ The scope is the smallest possible loop that satisfies `docs/PRODUCT_CONTEXT.md`
 
 #### Acceptance criteria
 
-- [ ] Run the full M1 manual test path against a real local OpenClaw via at least one of path A (bridge, hardened by CF-023) or path B (ClawFace as an operator client of the OpenClaw Gateway Protocol, CF-026). Not only the mock dev server, and not only the bridge fallback adapter.
+- [x] Run the full M1 manual test path against a real local OpenClaw via at least one of path A (bridge, hardened by CF-023) or path B (ClawFace as an operator client of the OpenClaw Gateway Protocol, CF-026). Not only the mock dev server, and not only the bridge fallback adapter. Validated path A on 2026-04-30 with real `openclaw agent --local` output: pair succeeded, Agent Context showed repo/branch/session metadata, user turn produced `openclaw_agent` running → real agent reply → `openclaw_agent` done, no fallback chip appeared, and reconnect after `revoke_session` returned the expected revoked-session error.
 - [x] `README.md` has a "M1 local test path" section covering at minimum path A with the exact commands for starting the bridge and Expo app, in order, with required env vars (`CLAWFACE_REPO_PATH`, `OPENCLAW_BIN`, `OPENCLAW_SESSION_ID`, `OPENCLAW_THREAD_ID`, `CLAWFACE_ALLOW_CLEARTEXT`) and their defaults
 - [x] If path B was used, `README.md` documents the path B run instructions (point ClawFace at a running `openclaw gateway`, complete the operator pairing handshake, exercise the M1 round-trip)
 - [x] `README.md` documents what the maintainer should see at each step: pairing succeeds, paired Trusted Agent shows Agent Context derived from OpenClaw (`hello-ok.snapshot` / `presence` for path B; bridge stdout for path A), the bound Thread shows repo/session metadata, sent message produces an OpenClaw response in the same Thread, transport logs confirm the response came from real OpenClaw (no fallback / no echo)
 - [x] `README.md` documents how to tell a real OpenClaw turn apart from a bridge-fallback turn (per CF-023)
 - [x] `README.md` documents known limitations and sharp edges honestly (e.g. approvals not bridged, only one bound thread per bridge instance, default bridge session id assumes `main`)
-- [ ] Wire-protocol problems uncovered during the M1 validation are filed back as ClawFace issues / `docs/PROTOCOL.md` amendments before declaring M1 reachable
-- [ ] Ping the maintainer with concise test instructions once the M1 path is validated
+- [x] Wire-protocol problems uncovered during the M1 validation are filed back as ClawFace issues / `docs/PROTOCOL.md` amendments before declaring M1 reachable. Validation uncovered the invalid `agent:main:main` bridge session-id default and the revoked-session error flush edge; both were fixed before marking CF-016 done.
+- [x] Ping the maintainer with concise test instructions once the M1 path is validated.
 
 #### Test plan
 
@@ -1320,7 +1320,7 @@ Build a web billing portal for Pro/Team subscriptions and an entitlement API the
 | CF-013 | MCP server integration interface | - | P1 | REMOVED | CF-010 |
 | CF-014 | OpenClaw local bridge MVP | M1 | P0 | DONE | CF-001 |
 | CF-015 | OpenClaw approval bridge | Post-M1 | P1 | TODO | CF-014, CF-004, CF-018, CF-020 |
-| CF-016 | M1 readiness check: boot ClawFace and connect to OpenClaw in a single thread | M1 | P0 | TODO | CF-014, CF-018, CF-023, CF-024 |
+| CF-016 | M1 readiness check: boot ClawFace and connect to OpenClaw in a single thread | M1 | P0 | DONE | CF-014, CF-018, CF-023, CF-024 |
 | CF-017 | Workstream-first domain module | M1 | P0 | DONE | CF-014 |
 | CF-018 | Transport event normalization seam | M1 | P0 | DONE | CF-001, CF-014 |
 | CF-019 | Pairing workflow adapter | Post-M1 | P2 | TODO | CF-014 |

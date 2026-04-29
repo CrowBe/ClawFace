@@ -96,6 +96,8 @@ Use this checklist from a clean start when validating CF-016. Path B is the reco
 
 Known M1 limits: approvals are intentionally Post-M1, path A binds one explicit OpenClaw session/thread per bridge instance, and path B tokenless signed pairing is implemented client-side but currently unvalidated against the local Gateway auth configuration when it reports `AUTH_TOKEN_MISSING`.
 
+Latest CF-016 validation: on 2026-04-30, path A was validated against a real local `openclaw agent --local` turn from a clean bridge pair. The run produced the expected `openclaw_agent` running chip, real agent reply, `openclaw_agent` done chip, no fallback chip, and rejected reconnect after `revoke_session`.
+
 ### OpenClaw Gateway (path B)
 
 ClawFace can connect directly to a running OpenClaw Gateway as an operator client. The app transport (`services/transport/openclaw-gateway.ts`) implements Gateway Protocol v3: `connect.challenge`/`connect` handling, token/device-token authentication, `sessions.send` for user turns, `sessions.messages.subscribe` for streamed events, and `sessions.create` for new threads. Mobile device signing is wired with a per-agent Ed25519 identity stored in SecureStore.
