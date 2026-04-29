@@ -1129,7 +1129,7 @@ The transport investigation (2026-04-29) confirmed that OpenClaw's Gateway WebSo
 **`hello-ok.policy` limit consumption**
 
 - [x] Store `maxPayload` from `hello-ok.policy` and guard outbound frame size against it
-- [ ] Store `tickIntervalMs` and use it for reconnect/keepalive timing instead of hardcoded constants
+- [x] Store `tickIntervalMs` and use it for Gateway tick/keepalive timeout detection instead of hardcoded constants
 - [x] Oversized outbound frames are rejected client-side with a transport notice before sending
 
 **`system-event` presence beacons**
