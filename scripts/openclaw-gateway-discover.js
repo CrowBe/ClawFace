@@ -26,6 +26,11 @@ const SCOPES = (process.env.OPENCLAW_GATEWAY_SCOPES || '')
   .filter(Boolean);
 if (SCOPES.length === 0) SCOPES.push(...DEFAULT_SCOPES);
 const PRINT_FULL_FEATURES = process.env.OPENCLAW_GATEWAY_PRINT_FULL_FEATURES === '1';
+const SEND_TEXT = process.env.OPENCLAW_GATEWAY_SEND_TEXT || '';
+const SEND_SESSION_KEY = process.env.OPENCLAW_GATEWAY_SEND_SESSION_KEY || '';
+const ROUND_TRIP_CAPTURE_MS = process.env.OPENCLAW_GATEWAY_ROUND_TRIP_CAPTURE_MS
+  ? parseInt(process.env.OPENCLAW_GATEWAY_ROUND_TRIP_CAPTURE_MS, 10)
+  : 30_000;
 const ED25519_SPKI_PREFIX = Buffer.from('302a300506032b6570032100', 'hex');
 
 /** @param {Buffer} buf */
@@ -102,6 +107,37 @@ function summarizeValue(value) {
 }
 
 
+/** @param {unknown} msg */
+function summarizeGatewayEvent(msg) {
+  if (!msg || typeof msg !== 'object' || Array.isArray(msg)) return { type: typeof msg };
+  const record = /** @type {Record<string, any>} */ (msg);
+  const payload = record.payload && typeof record.payload === 'object' && !Array.isArray(record.payload) ? record.payload : {};
+  const data = payload.data && typeof payload.data === 'object' && !Array.isArray(payload.data) ? payload.data : {};
+  const message = payload.message && typeof payload.message === 'object' && !Array.isArray(payload.message) ? payload.message : {};
+  return {
+    event: record.event,
+    stream: payload.stream,
+    state: payload.state,
+    phase: data.phase,
+    role: message.role,
+    hasSessionKey: typeof payload.sessionKey === 'string' || typeof record.sessionKey === 'string',
+    textLength: typeof message.text === 'string'
+      ? message.text.length
+      : typeof message.content === 'string'
+        ? message.content.length
+        : undefined,
+    dataKeys: objectKeys(data).slice(0, 12),
+    payloadKeys: objectKeys(payload).slice(0, 12),
+  };
+}
+
+/** @param {unknown[]} events */
+function printRoundTripEvents(events) {
+  console.log('[round-trip] captured events');
+  console.log(JSON.stringify(events.map(summarizeGatewayEvent), null, 2));
+}
+
+
 /** @param {unknown} value */
 function extractSessionKeys(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return [];
@@ -145,6 +181,7 @@ function printHelloSummary(hello) {
 function createGatewayClient() {
   const ws = new WebSocket(GATEWAY_URL);
   const pending = new Map();
+  const eventListeners = new Set();
   let helloOk = null;
   let challengeSeen = false;
   const device = createEphemeralDeviceIdentity();
@@ -226,6 +263,7 @@ function createGatewayClient() {
       }
 
       if (msg.type === 'event') {
+        for (const listener of eventListeners) listener(msg);
         return;
       }
 
@@ -288,7 +326,12 @@ function createGatewayClient() {
     });
   }
 
-  return { ws, connectPromise, request };
+  function onEvent(listener) {
+    eventListeners.add(listener);
+    return () => eventListeners.delete(listener);
+  }
+
+  return { ws, connectPromise, request, onEvent };
 }
 
 async function main() {
@@ -329,6 +372,49 @@ async function main() {
     }
   } else {
     console.log('- sessions.preview: skipped (not advertised)');
+  }
+
+  if (SEND_TEXT) {
+    if (!methods.has('sessions.send')) {
+      console.log('[round-trip] skipped: sessions.send not advertised');
+    } else {
+      console.log('[round-trip] opt-in send probe enabled via OPENCLAW_GATEWAY_SEND_TEXT');
+      let key = SEND_SESSION_KEY;
+      if (!key && methods.has('sessions.create')) {
+        const createPayload = await client.request('sessions.create', { key: `clawface-discover-${makeId()}`, label: 'ClawFace Gateway discovery' });
+        if (createPayload && typeof createPayload === 'object' && !Array.isArray(createPayload) && typeof createPayload.key === 'string') {
+          key = createPayload.key;
+          console.log('- sessions.create: ok');
+        }
+      }
+
+      if (!key) {
+        console.log('[round-trip] skipped: no session key available (set OPENCLAW_GATEWAY_SEND_SESSION_KEY or use a Gateway that advertises sessions.create)');
+      } else {
+        const capturedEvents = [];
+        const unsubscribe = client.onEvent(event => {
+          const payload = event && typeof event === 'object' && !Array.isArray(event) ? event.payload : null;
+          const payloadSessionKey = payload && typeof payload === 'object' && !Array.isArray(payload) ? payload.sessionKey : undefined;
+          const eventSessionKey = event && typeof event === 'object' && !Array.isArray(event) ? event.sessionKey : undefined;
+          if (payloadSessionKey === key || eventSessionKey === key) capturedEvents.push(event);
+        });
+
+        if (methods.has('sessions.messages.subscribe')) {
+          try {
+            await client.request('sessions.messages.subscribe', { key });
+            console.log('- sessions.messages.subscribe: ok');
+          } catch (err) {
+            console.log(`- sessions.messages.subscribe: ${err instanceof Error ? err.message : String(err)}`);
+          }
+        }
+
+        await client.request('sessions.send', { key, message: SEND_TEXT, idempotencyKey: makeId() });
+        console.log(`- sessions.send: ok; capturing events for ${ROUND_TRIP_CAPTURE_MS}ms`);
+        await new Promise(resolve => setTimeout(resolve, Math.max(0, ROUND_TRIP_CAPTURE_MS)));
+        unsubscribe();
+        printRoundTripEvents(capturedEvents);
+      }
+    }
   }
 
   client.ws.close(1000, 'discovery complete');
