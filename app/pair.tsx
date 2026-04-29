@@ -52,7 +52,7 @@ function parsePairingPayload(raw: string): PairingPayload | null {
       typeof obj.host === 'string' &&
       typeof obj.port === 'number' &&
       (
-        (obj.transport === 'openclaw-gateway' && (typeof obj.token === 'string' || typeof obj.sessionKey === 'string')) ||
+        obj.transport === 'openclaw-gateway' ||
         (typeof obj.fingerprint === 'string' && typeof obj.code === 'string')
       )
     ) {
@@ -93,12 +93,11 @@ export default function PairScreen() {
     try {
       if (payload.transport === 'openclaw-gateway') {
         const token = payload.token ?? payload.sessionKey;
-        if (!token) throw new Error('Gateway pairing requires a token');
         const name = payload.name ?? (agentName || 'OpenClaw Gateway');
         const context = payload.context;
         const agent = addAgent(name, payload.host, undefined, payload.port, payload.secure, context, 'openclaw-gateway');
-        await setGatewayDeviceToken(agent.id, token);
-        resolveTransport(agent).connect(agent).catch(() => {});
+        if (token) await setGatewayDeviceToken(agent.id, token);
+        await resolveTransport(agent).connect(agent);
         setPairedAgentId(agent.id);
         setAgentName(name);
         setStage('done');

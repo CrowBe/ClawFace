@@ -102,7 +102,7 @@ OpenClaw pairing does not require any OpenClaw-side modification for ClawFace. T
 
 The **only** ClawFace-specific part of pairing is how the user gets the token/URL onto the phone — the QR code scanning flow, paste input, or Bonjour auto-discovery. The Gateway protocol handshake is identical regardless.
 
-The first app pairing bridge accepts a ClawFace QR/paste payload with `transport: "openclaw-gateway"`, `host`, `port`, optional `secure`, optional display `context`, and either `token` or `sessionKey` containing the Gateway-issued/approved operator credential. The app stores that credential as an OpenClaw Gateway device token in SecureStore and marks the paired agent as `transport: "openclaw-gateway"`. This is an interim local-M1 path that coexists with the OpenClaw bootstrap token format; it must not become a separate ClawFace auth protocol.
+The first app pairing bridge accepts a ClawFace QR/paste payload with `transport: "openclaw-gateway"`, `host`, `port`, optional `secure`, optional display `context`, and optional `token` or `sessionKey` containing the Gateway-issued/approved operator credential. If a credential is present, the app stores it as an OpenClaw Gateway device token in SecureStore before connecting. If no credential is present, the app attempts the signed `connect.challenge` flow so OpenClaw can create a direct device-pairing approval request for the mobile device identity. This is an interim local-M1 path that coexists with the OpenClaw bootstrap token format; it must not become a separate ClawFace auth protocol.
 
 
 ### Gateway methods ClawFace expects to use

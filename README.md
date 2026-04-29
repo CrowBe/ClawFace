@@ -66,9 +66,9 @@ To pair ClawFace with a local Gateway, construct a pairing payload with `transpo
 }
 ```
 
-The `token` field should contain a Gateway-accepted auth token (the same token used with `npm run gateway:discover`). The optional `context` field populates Agent Context display in the app.
+The `token` field is optional. When present, it should contain a Gateway-accepted auth token (the same token used with `npm run gateway:discover`). When omitted, ClawFace attempts the signed Gateway device-pairing flow so OpenClaw can ask the operator to approve the mobile device. The optional `context` field populates Agent Context display in the app.
 
-Once paired, ClawFace stores the supplied Gateway credential, and any `hello-ok.auth.deviceToken` issued by the Gateway, in SecureStore and routes communication through the Gateway transport. Streamed Gateway events (`session.message`, `chat`, `session.tool`) are normalized into ClawFace's message model; unsupported `agent` streams surface as controlled notices until exact stream mappings are added.
+Once paired, ClawFace stores any supplied Gateway credential, and any `hello-ok.auth.deviceToken` issued by the Gateway, in SecureStore and routes communication through the Gateway transport. Streamed Gateway events (`session.message`, `chat`, `session.tool`) are normalized into ClawFace's message model; unsupported `agent` streams surface as controlled notices until exact stream mappings are added.
 
 To validate Gateway connectivity before pairing:
 
