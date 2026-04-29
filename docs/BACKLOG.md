@@ -784,7 +784,7 @@ CF-026 must update the canonical docs rather than turning this backlog item into
 
 **Documentation and integration**
 
-- [ ] `README.md` documents path B local test instructions: how to pair ClawFace with a running `openclaw gateway` via the `openclaw-gateway` transport type.
+- [x] `README.md` documents path B local test instructions: how to pair ClawFace with a running `openclaw gateway` via the `openclaw-gateway` transport type.
 - [x] An honest assessment, written into `docs/PROTOCOL.md`, of which extensions ClawFace would want upstream OpenClaw to add for mobile UX. Each candidate extension is described as a small upstream PR proposal, not a new protocol. (Completed in transport investigation 2026-04-29: five candidate upstream helpers documented in `docs/PROTOCOL.md` §2.7.)
 - [x] The `scripts/openclaw-bridge.js` adapter remains for users running `openclaw agent` CLI without a Gateway, documented as a legacy fallback rather than the M1 path. CF-016 path A continues to use it; CF-016 path B uses the Gateway Protocol transport directly.
 
