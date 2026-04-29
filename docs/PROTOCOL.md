@@ -184,11 +184,11 @@ Inbound Gateway frames must pass through the ClawFace transport normalization se
 
 The Gateway returns transport policy limits in `hello-ok.payload.policy`:
 
-- `maxPayload` (bytes): maximum frame size the Gateway will accept. ClawFace should guard outbound frame size against this limit.
-- `maxBufferedBytes` (bytes): maximum buffered bytes before the Gateway closes the connection. ClawFace should not queue unbounded outbound data.
-- `tickIntervalMs` (ms): Gateway tick/heartbeat interval. ClawFace should use this for reconnect/keepalive timing rather than hardcoded constants.
+- `maxPayload` (bytes): maximum frame size the Gateway will accept. ClawFace stores this per connection and rejects oversized outbound frames before sending.
+- `maxBufferedBytes` (bytes): maximum buffered bytes before the Gateway closes the connection. ClawFace stores this per connection and rejects sends that would exceed the current socket buffer budget.
+- `tickIntervalMs` (ms): Gateway tick/heartbeat interval. ClawFace stores this per connection for future reconnect/keepalive tuning.
 
-With diagnostics enabled, oversized inbound frames and slow outbound buffers emit `payload.large` events (sizes, limits, surfaces, safe reason codes — no message body or secrets) before the Gateway closes or drops the affected frame.
+Oversized outbound frames and over-budget outbound buffers surface as ClawFace `transport_notice` events before sending. With Gateway diagnostics enabled, oversized inbound frames and slow outbound buffers may also emit `payload.large` events (sizes, limits, surfaces, safe reason codes — no message body or secrets) before the Gateway closes or drops the affected frame.
 
 ### Discovery: Bonjour/mDNS and wide-area DNS-SD
 
