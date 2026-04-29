@@ -1227,8 +1227,8 @@ Add end-to-end envelope encryption so that when ClawFace routes messages through
 
 #### Acceptance criteria
 
-- [ ] Add `@noble/ciphers` dependency (same author as `@noble/ed25519`, pure JS, no native modules)
-- [ ] Implement Ed25519→X25519 key conversion using the existing per-agent Ed25519 identity seed in SecureStore
+- [ ] Add vetted pure-JS crypto dependencies for X25519 key agreement and XChaCha20-Poly1305 envelope encryption
+- [ ] Generate a separate per-agent X25519 key agreement key and bind it to the existing Ed25519 device identity with a signed key-binding payload
 - [ ] Implement X25519 ECDH key agreement during pairing to derive a shared symmetric key between phone and agent
 - [ ] Store the derived shared key in SecureStore alongside the existing agent credentials
 - [ ] Implement XChaCha20-Poly1305 per-message encryption: encrypt payload before relay send, decrypt after relay receive
@@ -1245,7 +1245,7 @@ npx tsc --noEmit
 ```
 
 Unit/integration:
-1. Generate two Ed25519 keypairs, convert to X25519, derive shared key, encrypt a message with one side, decrypt with the other.
+1. Generate two Ed25519 identity keypairs plus separate X25519 key-agreement keypairs, verify signed key bindings, derive shared key, encrypt a message with one side, decrypt with the other.
 2. Verify that encrypted payloads round-trip correctly through a mock relay that only touches routing metadata.
 3. Verify that tampered ciphertext is rejected (Poly1305 authentication check).
 

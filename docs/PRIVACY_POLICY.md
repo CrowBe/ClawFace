@@ -62,7 +62,7 @@ ClawFace employs multiple layers of security:
 - **Replay protection**: Approval decisions include unique request identifiers (UUID v4) to prevent replay attacks.
 - **Session revocation**: Unpairing an agent revokes the session credential server-side and deletes local keys.
 
-When the optional hosted relay is used, message payloads may be encrypted end-to-end so that the relay infrastructure cannot read message content (see §6).
+When the optional hosted relay is launched, message payloads should be encrypted end-to-end so that the relay infrastructure cannot read message content (see §6).
 
 ---
 
@@ -84,11 +84,11 @@ When the optional hosted relay is used, message payloads may be encrypted end-to
 
 ## 6. End-to-End Encryption
 
-When connecting through the optional hosted relay, ClawFace supports end-to-end encryption for message payloads. In this mode:
+When the optional hosted relay is launched, ClawFace is intended to support end-to-end encryption for message payloads. In this mode:
 
 - Message content is encrypted on your device before transmission and decrypted only on the receiving device.
 - The hosted relay sees only routing metadata (agent ID, thread ID, direction, timestamp) and encrypted payload blobs.
-- The relay cannot read, log, or process message content, code, prompts, tool outputs, or secrets.
+- The relay should not be able to read, log, or process message content, code, prompts, tool outputs, or secrets.
 
 ---
 

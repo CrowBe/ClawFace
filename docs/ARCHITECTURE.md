@@ -261,13 +261,13 @@ When ClawFace routes messages through the hosted relay, message payloads should 
 
 Encryption strategy:
 
-1. **Key agreement during pairing.** ClawFace and the paired agent already establish a cryptographic trust anchor via Ed25519 device identity and signed-challenge handshake. Convert the Ed25519 keypair to X25519 (Curve25519 ECDH) to derive a shared symmetric key. This reuses the existing pairing identity without introducing a separate key-exchange flow.
+1. **Key agreement during pairing.** ClawFace and the paired agent already establish a cryptographic trust anchor via Ed25519 device identity and signed-challenge handshake. Relay-mode encryption should add a separate X25519 key agreement key for each paired agent and bind it to the existing Ed25519 device identity with a signed key-binding payload. This avoids relying on fragile Ed25519→X25519 key conversion and keeps signing identity separate from encryption keys.
 
 2. **Per-message envelope encryption.** Before sending through the relay, encrypt the message payload with the shared key using XChaCha20-Poly1305 (authenticated encryption with a random 192-bit nonce per message). The relay frame carries: routing metadata (agent ID, thread ID, direction, timestamp, message type) + encrypted payload blob + nonce.
 
 3. **Relay sees only routing metadata.** The relay reads enough to route (which agent, which thread, which direction) and enforces plan quotas/rate limits, but cannot decrypt message content. Push notification payloads carry only route hints (agent ID, event type), never message text.
 
-4. **Library fit.** `@noble/ed25519` (already a dependency) and `@noble/ciphers` (same author, pure JS, no native modules) provide Ed25519↔X25519 conversion and XChaCha20-Poly1305. No native crypto module required.
+4. **Library fit.** `@noble/ed25519` is already used for device identity. Relay encryption should add vetted pure-JS primitives for X25519 key agreement and XChaCha20-Poly1305 encryption, then prove the full round-trip in tests before enabling relay mode. Do not assume one package provides both key conversion and envelope encryption without verifying its API.
 
 What the relay can see by design:
 
@@ -327,7 +327,7 @@ Hosted mode should launch as a control-plane/relay product, not as transcript ho
 1. ~~Define the pairing/session protocol contract.~~ Done — `docs/PROTOCOL.md` profile/overlay over OpenClaw Gateway Protocol v3.
 2. ~~Document message schemas for transport events.~~ Done — transport types in `services/transport/types.ts`, Gateway normalizer in `services/transport/normalize.ts`.
 3. ~~Add replay-safe approval semantics.~~ Done — `reqId` in CF-004.
-4. Add revocation semantics for devices, agents, and sessions. (Device token revocation via Gateway RPC remains to be confirmed and wired.)
+4. Add revocation semantics for devices, agents, and sessions. (Gateway device-token revocation is wired for connected signed device identities; broader relay/session revocation semantics remain.)
 5. ~~Define local/direct mode vs hosted/relay mode boundaries.~~ Done — `mode: 'direct' | 'relay'` in CF-008.
 6. Keep transcript/content sync out of scope until encryption, retention, and pricing are explicit.
 7. Wire mobile device Ed25519 signing for non-loopback Gateway connections.
