@@ -1041,6 +1041,65 @@ Manual:
 
 ---
 
+### CF-031 — Multi-session/thread support per paired agent
+
+**Status:** DONE
+**Priority:** P1
+**Milestone:** M2 — Multi-thread
+**Epic:** H — Transport Investigation Follow-ups
+**Blocked by:** CF-026
+
+#### Description
+
+ClawFace must support multiple concurrent threads/sessions per paired agent. Each OpenClaw Gateway session maps to one ClawFace Thread. This involves:
+
+- Subscribing to the Gateway session index (`sessions.subscribe`) on connect so new sessions created by other clients appear automatically.
+- Handling `sessions.changed` events to keep the thread list in sync.
+- Fetching session history (`chat.history`) when opening a thread with no local messages.
+- Exposing `subscribeToThread` and `listSessions` as public transport methods.
+- Adding store actions (`refreshThreads`, `openThread`) for UI use.
+- Thread list UI: pull-to-refresh, empty state, thread count, new thread creation with title modal.
+- Chat screen: auto-subscribe + history hydration on open.
+- Protocol docs: multi-session lifecycle section in `docs/PROTOCOL.md`.
+
+All multi-session operations rely on existing OpenClaw Gateway Protocol methods. No upstream changes required.
+
+#### Acceptance criteria
+
+- [x] Transport subscribes to `sessions.subscribe` on connect
+- [x] Transport handles `sessions.changed` events by re-fetching `sessions.list`
+- [x] Transport exposes `listSessions`, `subscribeToThread`, `fetchSessionHistory` methods
+- [x] Store provides `refreshThreads` and `openThread` actions
+- [x] Threads screen: pull-to-refresh, empty state, thread count badge, new thread modal with title input
+- [x] Chat screen: auto-subscribes to thread messages and hydrates history on open
+- [x] `docs/PROTOCOL.md` §2 documents multi-session lifecycle
+- [x] `npx tsc --noEmit` passes
+
+#### Test plan
+
+```bash
+npx tsc --noEmit
+```
+
+Manual:
+1. Pair a local OpenClaw Gateway agent with multiple existing sessions — all sessions appear in the threads list.
+2. Create a new session from another client (CLI, web UI) — it appears in ClawFace without manual refresh.
+3. Pull-to-refresh on the threads screen updates the list.
+4. Create a new thread via the modal — it appears in the list and navigates to the chat screen.
+5. Open a thread with existing messages but no local cache — history loads from the Gateway.
+
+#### Files
+
+- `services/transport/types.ts`
+- `services/transport/openclaw-gateway.ts`
+- `services/transport/normalize.ts`
+- `store/index.ts`
+- `app/threads/[agentId].tsx`
+- `app/chat/[agentId]/[threadId].tsx`
+- `docs/PROTOCOL.md`
+
+---
+
 ## Epic I — Google Play Store Readiness
 
 > These issues track the work required to ship ClawFace to the Google Play Store and establish the monetisation foundation. The app itself ships as a free download; paid features are unlocked by web-owned entitlements.

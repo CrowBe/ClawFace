@@ -1,4 +1,4 @@
-import type { Agent, AgentContext, Thread } from '@/data/seed';
+import type { Agent, AgentContext, Message, Thread } from '@/data/seed';
 import { getSignedGatewayDeviceIdentity } from '@/services/gatewayDeviceIdentity';
 import { deleteGatewayDeviceIdentitySeed, deleteGatewayDeviceToken, getGatewayDeviceToken, setGatewayDeviceToken } from '@/services/secureStore';
 import { GatewayTransportEventNormalizer } from './normalize';
@@ -136,6 +136,64 @@ function extractSessionThreads(agentId: string, payload: unknown): Thread[] {
   return payload.sessions
     .map(entry => sessionEntryToThread(agentId, entry))
     .filter((thread): thread is Thread => thread !== null);
+}
+
+function stableNumericId(input: string): number {
+  let hash = 2166136261;
+  for (let i = 0; i < input.length; i += 1) {
+    hash ^= input.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+function extractSessionMessages(threadId: string, payload: unknown): Message[] {
+  if (!isObject(payload) || !Array.isArray(payload.messages)) return [];
+  const messages: Message[] = [];
+
+  for (const entry of payload.messages) {
+    if (!isObject(entry)) continue;
+
+    const rawRole = typeof entry.role === 'string' ? entry.role : null;
+    if (!rawRole) continue;
+
+    const role: Message['role'] | null =
+      rawRole === 'assistant' ? 'agent' :
+      rawRole === 'user' ? 'user' :
+      rawRole === 'tool' ? 'tool' :
+      null;
+    if (!role) continue;
+
+    const text = typeof entry.text === 'string' ? entry.text
+      : typeof entry.content === 'string' ? entry.content
+      : Array.isArray(entry.content)
+        ? entry.content
+            .map((part: unknown) => isObject(part) && typeof part.text === 'string' ? part.text : '')
+            .join('')
+        : undefined;
+
+    const opaqueId = typeof entry.id === 'string' ? entry.id
+      : typeof entry.messageId === 'string' ? entry.messageId
+      : `${messages.length}`;
+
+    const numericId = stableNumericId(`${threadId}|${opaqueId}`);
+
+    if (role === 'tool') {
+      messages.push({
+        id: numericId,
+        role: 'tool',
+        name: typeof entry.name === 'string' ? entry.name : 'tool',
+        status: 'done',
+        result: text,
+        t: 'now',
+      });
+    } else {
+      if (!text) continue;
+      messages.push({ id: numericId, role, text, t: 'now' });
+    }
+  }
+
+  return messages;
 }
 
 function extractGatewayAgentContext(helloOk: unknown): AgentContext | null {
@@ -284,6 +342,7 @@ export class OpenClawGatewayTransport implements AgentTransport {
                   : 'Could not list Gateway sessions',
               });
             });
+            this.subscribeToSessionIndex(agent.id);
             resolve();
           } else {
             const message = isObject(frame.error) && typeof frame.error.message === 'string'
@@ -303,6 +362,11 @@ export class OpenClawGatewayTransport implements AgentTransport {
             if (frame.ok) pending.resolve(frame.payload);
             else pending.reject(new Error(isObject(frame.error) && typeof frame.error.message === 'string' ? frame.error.message : 'Gateway request failed'));
           }
+          return;
+        }
+
+        if (isObject(frame) && frame.type === 'event' && frame.event === 'sessions.changed') {
+          this.hydrateGatewaySessions(agent.id).catch(() => {});
           return;
         }
 
@@ -494,13 +558,25 @@ export class OpenClawGatewayTransport implements AgentTransport {
 
   private async hydrateGatewaySessions(agentId: string): Promise<void> {
     const payload = await this.request(agentId, 'sessions.list', {
-      limit: 20,
+      limit: 50,
       includeDerivedTitles: true,
       includeLastMessage: true,
     });
 
     const threads = extractSessionThreads(agentId, payload);
     threads.forEach(thread => this.emit({ type: 'thread_updated', thread }));
+  }
+
+  private subscribeToSessionIndex(agentId: string): void {
+    this.request(agentId, 'sessions.subscribe', {}).catch(err => {
+      this.emit({
+        type: 'transport_notice',
+        level: 'warning',
+        message: err instanceof Error
+          ? `Could not subscribe to Gateway session index: ${err.message}`
+          : 'Could not subscribe to Gateway session index',
+      });
+    });
   }
 
   async sendMessage(agentId: string, threadId: string, text: string): Promise<void> {
@@ -518,6 +594,30 @@ export class OpenClawGatewayTransport implements AgentTransport {
       level: 'warning',
       message: 'OpenClaw Gateway approval resolution is not implemented yet',
     });
+  }
+
+  async listSessions(agentId: string): Promise<void> {
+    const payload = await this.request(agentId, 'sessions.list', {
+      limit: 50,
+      includeDerivedTitles: true,
+      includeLastMessage: true,
+    });
+
+    const threads = extractSessionThreads(agentId, payload);
+    threads.forEach(thread => this.emit({ type: 'thread_updated', thread }));
+  }
+
+  async subscribeToThread(agentId: string, threadId: string): Promise<void> {
+    await this.ensureSubscribedToThread(agentId, threadId);
+  }
+
+  async fetchSessionHistory(agentId: string, threadId: string): Promise<Message[]> {
+    const payload = await this.request(agentId, 'chat.history', {
+      sessionKey: threadId,
+      limit: 50,
+    });
+
+    return extractSessionMessages(threadId, payload);
   }
 
   async createThread(agentId: string, title?: string): Promise<Thread> {

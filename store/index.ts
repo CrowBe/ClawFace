@@ -47,6 +47,9 @@ interface State {
   setAgentContext: (agentId: string, context: AgentContext) => void;
   addThread: (thread: Thread) => void;
   sweepExpiredApprovals: () => void;
+
+  refreshThreads: (agentId: string) => Promise<void>;
+  openThread: (agentId: string, threadId: string) => Promise<void>;
 }
 
 function isPendingApproval(message: Message, now = Date.now()) {
@@ -360,6 +363,40 @@ export const useStore = create<State>((set, get) => ({
   }),
 
   sweepExpiredApprovals: () => set(s => ({ threads: [...s.threads] })),
+
+  refreshThreads: async (agentId) => {
+    const agent = get().agents.find(a => a.id === agentId);
+    if (!agent) return;
+    const transport = resolveTransport(agent);
+    await transport.listSessions(agentId);
+  },
+
+  openThread: async (agentId, threadId) => {
+    const agent = get().agents.find(a => a.id === agentId);
+    if (!agent) return;
+    const transport = resolveTransport(agent);
+
+    transport.subscribeToThread(agentId, threadId).catch(() => {});
+
+    const thread = get().threads.find(t => t.id === threadId);
+    if (thread && thread.messages.length === 0) {
+      try {
+        const history = await transport.fetchSessionHistory(agentId, threadId);
+        if (history.length > 0) {
+          set(s => ({
+            threads: s.threads.map(t => {
+              if (t.id !== threadId) return t;
+              const historyIds = new Set(history.map(m => m.id));
+              const liveOnly = t.messages.filter(m => !historyIds.has(m.id));
+              return { ...t, messages: [...history, ...liveOnly] };
+            }),
+          }));
+        }
+      } catch {
+        // History fetch is best-effort
+      }
+    }
+  },
 }));
 
 subscribeToTransport(useStore);
