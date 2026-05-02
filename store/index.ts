@@ -264,8 +264,7 @@ export const useStore = create<State>((set, get) => ({
     const agents = await Promise.all(
       (saved.agents.length ? saved.agents : store.agents).map(async agent => {
         const sessionKey = await getSessionKey(agent.id).catch(() => null);
-        if (!sessionKey && agent.transport !== 'openclaw-gateway') return { ...agent, sessionKey: undefined, online: false };
-        const hydratedAgent = { ...agent, sessionKey: sessionKey ?? undefined, online: false };
+        const hydratedAgent = { ...agent, sessionKey: sessionKey ?? undefined, transport: 'openclaw-gateway' as const, online: false };
         resolveTransport(hydratedAgent).connect(hydratedAgent).catch(() => {});
         return hydratedAgent;
       })
