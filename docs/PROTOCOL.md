@@ -1,7 +1,7 @@
 # ClawFace Protocol Profile
 
 Status: Draft
-Profile revision: `0.8.0`
+Profile revision: `0.9.0`
 OpenClaw Gateway Protocol: `v3`
 Created: 2026-04-27
 Updated: 2026-05-02
@@ -111,7 +111,25 @@ Known candidates from local OpenClaw docs and generated Gateway schema declarati
 | Resolve approvals | `exec.approval.resolve`, `plugin.approval.resolve` | Requires `operator.approvals`; payloads are OpenClaw-owned and Post-M1 unless surfaced during M1 testing. |
 | Revoke stored device token | `device.token.revoke` | Requires `operator.pairing`; ClawFace calls it with `{ deviceId, role: "operator" }` when a connected signed device identity is available, then clears the local SecureStore token. Interim token-only pairing falls back to local deletion with a warning. |
 
-The app transport binds to `sessions.*` first. On `hello-ok`, `OpenClawGatewayTransport` derives initial Agent Context from `hello-ok.snapshot.presence` and `hello-ok.snapshot.sessionDefaults` and emits it to the store. On connect, it calls `sessions.list` with a bounded limit and derived-title/last-message hints, then emits ClawFace `thread_updated` events for returned sessions. Each returned full opaque Gateway `key` becomes the ClawFace `Thread.id` and `context.agentSessionId`; ClawFace does not parse the key. Before sending a user turn, it best-effort subscribes to `sessions.messages.subscribe` for the full opaque Thread/session key, then calls `sessions.send` with an idempotency key. Subscription failure is surfaced as a transport notice and does not prevent the send. A local opt-in Gateway probe on 2026-04-30 successfully created a session, subscribed to messages, sent via `sessions.send`, and observed session-keyed `session.message`, `agent` assistant/lifecycle, and `chat` delta/final events. `chat.*` remains useful for history and lower-level compatibility, but it exposes provenance/origin fields that are not part of the default mobile command surface.
+The app transport binds to `sessions.*` first. On `hello-ok`, `OpenClawGatewayTransport` derives initial Agent Context from `hello-ok.snapshot.presence` and `hello-ok.snapshot.sessionDefaults` and emits it to the store. On connect, it calls `sessions.list` with a bounded limit (currently 50) and derived-title/last-message hints, then emits ClawFace `thread_updated` events for returned sessions. Each returned full opaque Gateway `key` becomes the ClawFace `Thread.id` and `context.agentSessionId`; ClawFace does not parse the key. Before sending a user turn, it best-effort subscribes to `sessions.messages.subscribe` for the full opaque Thread/session key, then calls `sessions.send` with an idempotency key. Subscription failure is surfaced as a transport notice and does not prevent the send. A local opt-in Gateway probe on 2026-04-30 successfully created a session, subscribed to messages, sent via `sessions.send`, and observed session-keyed `session.message`, `agent` assistant/lifecycle, and `chat` delta/final events. `chat.*` remains useful for history and lower-level compatibility, but it exposes provenance/origin fields that are not part of the default mobile command surface.
+
+### Multi-session lifecycle
+
+ClawFace supports multiple concurrent threads/sessions per paired agent. Each OpenClaw Gateway session maps to one ClawFace Thread. The lifecycle:
+
+1. **Session discovery on connect.** After `hello-ok`, the transport calls `sessions.list` to hydrate all existing sessions as Threads. It then calls `sessions.subscribe` to receive `sessions.changed` events when the session index changes (new sessions created, sessions updated or removed by other clients).
+
+2. **Live session index updates.** When the Gateway emits `sessions.changed`, the transport re-fetches the full session list via `sessions.list` and emits `thread_updated` events to reconcile the store. This keeps the thread list in sync across all operator clients.
+
+3. **Thread-level message subscription.** Per-thread message subscription (`sessions.messages.subscribe`) is triggered on two paths:
+   - **On thread open:** When the user navigates to a chat screen, the store calls `openThread`, which subscribes to that session's messages and (if the thread has no local messages) fetches history via `chat.history`.
+   - **On send:** Before the first message send in a thread, `ensureSubscribedToThread` subscribes if not already subscribed.
+
+4. **Session creation.** ClawFace creates new Gateway sessions via `sessions.create` with a `clawface-` prefixed key and an optional user-provided label. The new session is immediately subscribed to and added to the thread list.
+
+5. **History hydration.** When a thread is opened with no locally-cached messages, the transport fetches recent history via `chat.history` with a bounded `limit` (currently 50). This populates the thread from the Gateway's persisted transcript.
+
+6. **Pull-to-refresh.** The thread list supports manual refresh, which re-calls `sessions.list` to pick up any sessions that may have been missed (e.g. if `sessions.subscribe` was not available or failed).
 
 ### Gateway events ClawFace expects to consume
 
@@ -123,7 +141,7 @@ Known event families from OpenClaw docs and schema declarations:
 | Agent stream/progress | `agent` | `AgentEvent` has `{ runId, seq, stream, ts, sessionKey?, data }`. When `sessionKey` is present, ClawFace normalizes `stream: "assistant"` into assistant message upserts and `stream: "tool"` / `stream: "command_output"` into tool-chip updates keyed by the full opaque `sessionKey`. Unknown streams remain controlled notices. |
 | Tool stream chips | `session.tool` | Maps subscribed tool events with `{ sessionKey, data: { phase, toolCallId, name?, args?, partialResult?, result?, isError? } }` into ClawFace tool messages. `start`/`update` render as `running`; `result` renders as `done` or `failed`. |
 | Chat stream compatibility | `chat` | `ChatEvent` has `{ runId, sessionKey, seq, state, message?, errorMessage?, errorKind?, usage?, stopReason? }`. OpenClaw `state: "delta"` carries the current buffered assistant text, so ClawFace must upsert the partial message instead of appending it as an incremental suffix. `state: "final"` maps to final message upsert; `aborted`/`error` map to transport notices or final failed assistant state. |
-| Session/workstream list updates | `sessions.changed` | Refresh or patch Workstream/Thread list without deriving route data from delimiters. |
+| Session/workstream list updates | `sessions.changed` | Triggers a full `sessions.list` re-fetch in the transport to reconcile the thread list. The transport handles this event before normalization so it has access to the agent connection context. |
 | Presence/agent availability | `presence`, `tick`, `health` | Update connection/presence UI only; do not create noisy alerts. |
 | Exec approval cards | `exec.approval.requested`, `exec.approval.resolved` | Requires `operator.approvals`; Post-M1 unless surfaced during M1 testing. |
 | Plugin approval cards | `plugin.approval.requested`, `plugin.approval.resolved` | Requires `operator.approvals`; Post-M1 unless surfaced during M1 testing. |

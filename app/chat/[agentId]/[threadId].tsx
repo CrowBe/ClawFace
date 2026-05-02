@@ -25,6 +25,7 @@ export default function ChatScreen() {
   const threads = useStore(s => s.threads);
   const resolveApproval = useStore(s => s.resolveApproval);
   const sendMessage = useStore(s => s.sendMessage);
+  const openThread = useStore(s => s.openThread);
 
   const route = getThreadRoute(threads, threadId);
   const agent = agents.find(a => a.id === (route?.agentId ?? agentId));
@@ -34,6 +35,12 @@ export default function ChatScreen() {
   const [autoApprove, setAutoApprove] = useState(false);
   const [input, setInput] = useState('');
   const scrollRef = useRef<ScrollView>(null);
+
+  useEffect(() => {
+    if (agentId && threadId) {
+      openThread(agentId, threadId).catch(() => {});
+    }
+  }, [agentId, threadId, openThread]);
 
   useEffect(() => {
     setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 100);

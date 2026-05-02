@@ -22,4 +22,7 @@ export interface AgentTransport {
   resolveApproval(agentId: string, threadId: string, msgId: number, reqId: string, decision: 'approved' | 'denied'): Promise<void>;
   createThread(agentId: string, title?: string): Promise<Thread>;
   subscribe(listener: TransportListener): () => void;
+  listSessions(agentId: string): Promise<void>;
+  subscribeToThread(agentId: string, threadId: string): Promise<void>;
+  fetchSessionHistory(agentId: string, threadId: string): Promise<Message[]>;
 }

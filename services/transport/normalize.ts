@@ -329,6 +329,7 @@ function normalizeGatewaySessionTool(payload: unknown): TransportNormalizationRe
   };
 }
 
+
 function malformed(rawType: string | undefined, message: string): TransportNormalizationResult {
   return {
     events: [],
@@ -353,10 +354,11 @@ export class GatewayTransportEventNormalizer {
           return normalizeGatewaySessionMessage(raw.payload);
         case 'session.tool':
           return normalizeGatewaySessionTool(raw.payload);
+        case 'sessions.changed':
+          return { controls: [], events: [], issues: [{ reason: 'unknown_type', rawType: 'sessions.changed', message: 'sessions.changed: transport should refresh session list' }] };
         case 'heartbeat':
         case 'tick':
         case 'presence':
-        case 'sessions.changed':
           return emptyResult();
         default:
           return {
