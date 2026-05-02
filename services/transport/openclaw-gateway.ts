@@ -342,6 +342,7 @@ export class OpenClawGatewayTransport implements AgentTransport {
                   : 'Could not list Gateway sessions',
               });
             });
+            this.subscribeToSessionIndex(agent.id);
             resolve();
           } else {
             const message = isObject(frame.error) && typeof frame.error.message === 'string'
@@ -564,7 +565,9 @@ export class OpenClawGatewayTransport implements AgentTransport {
 
     const threads = extractSessionThreads(agentId, payload);
     threads.forEach(thread => this.emit({ type: 'thread_updated', thread }));
+  }
 
+  private subscribeToSessionIndex(agentId: string): void {
     this.request(agentId, 'sessions.subscribe', {}).catch(err => {
       this.emit({
         type: 'transport_notice',

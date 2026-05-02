@@ -381,12 +381,15 @@ export const useStore = create<State>((set, get) => ({
     const thread = get().threads.find(t => t.id === threadId);
     if (thread && thread.messages.length === 0) {
       try {
-        const messages = await transport.fetchSessionHistory(agentId, threadId);
-        if (messages.length > 0) {
+        const history = await transport.fetchSessionHistory(agentId, threadId);
+        if (history.length > 0) {
           set(s => ({
-            threads: s.threads.map(t =>
-              t.id === threadId ? { ...t, messages } : t
-            ),
+            threads: s.threads.map(t => {
+              if (t.id !== threadId) return t;
+              const historyIds = new Set(history.map(m => m.id));
+              const liveOnly = t.messages.filter(m => !historyIds.has(m.id));
+              return { ...t, messages: [...history, ...liveOnly] };
+            }),
           }));
         }
       } catch {
