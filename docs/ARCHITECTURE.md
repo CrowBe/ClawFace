@@ -47,7 +47,7 @@ Architectural implications:
 - ClawFace is the mobile **command surface**; it is not an agent runtime, not a model provider, and not a tool/MCP configuration system (`docs/PRODUCT_CONTEXT.md` non-goals 1 and 2).
 - For OpenClaw integration, ClawFace is an **operator-class client** of the OpenClaw Gateway Protocol. It sits alongside the OpenClaw CLI, web UI, and native apps as a control-plane surface for an Agent Operator. It is not an OpenClaw node, runtime, channel handler, bridge, or capability host. OpenClaw's Gateway WebSocket Protocol is the single control-plane and node transport for all OpenClaw clients; the legacy TCP bridge has been removed from OpenClaw. ClawFace does not need to patch, fork, or extend OpenClaw to connect — it uses the existing Gateway exactly as the CLI, web UI, and macOS app do.
 - The first commercial wedge is technical users supervising coding agents (OpenClaw-style today), but the architecture must not assume the user is a developer or that the agent on the other end is a coding agent.
-- The stable contract between ClawFace and OpenClaw path B is the OpenClaw Gateway Protocol plus the ClawFace profile/overlay in `docs/PROTOCOL.md`. Legacy path A remains a ClawFace bridge/mock protocol fallback for local CLI-only development.
+- The stable contract between ClawFace and OpenClaw is the OpenClaw Gateway Protocol plus the ClawFace profile/overlay in `docs/PROTOCOL.md`.
 - OpenClaw pairing does not require any OpenClaw-side modification. The Gateway accepts any client presenting a valid token + signed challenge nonce. ClawFace-specific pairing UX (QR code flow, paste input, Bonjour auto-discovery) is purely a mobile client concern; the Gateway protocol handshake is identical for all operator clients.
 
 ---
@@ -127,25 +127,23 @@ Current repo shape:
 - Zustand store for app state
 - SecureStore for session keys and Gateway device tokens
 - AsyncStorage-backed persistence for non-secret app state with forward migrations
-- Legacy WebSocket transport for paired agent communication via bridge/mock server
 - OpenClaw Gateway transport (`services/transport/openclaw-gateway.ts`) implementing Gateway Protocol v3 `connect` handshake, `sessions.send`, `sessions.messages.subscribe`, and `sessions.create` as an `operator` role client
 - Gateway event normalization (`services/transport/normalize.ts`) for `session.message`, `chat`, `session.tool`, and session-keyed `agent` assistant/tool/command-output stream families; unknown or unkeyed `agent` streams surface as transport notices
 - Gateway discovery script (`scripts/openclaw-gateway-discover.js`) for protocol validation, client identity/handshake testing, optional write-scope round-trip probing, and optional signed-device token revocation validation
-- Mock/dev WebSocket server and OpenClaw CLI bridge for local testing
 - Shared-token and issued-device-token Gateway auth paths are locally validated; bootstrap-token support is a documented follow-up, and tokenless signed direct-pair approval is implemented client-side but remains unvalidated while the current local Gateway returns `AUTH_TOKEN_MISSING` with `canRetryWithDeviceToken: false`.
 - Expo Notifications integration
 - Production Android cleartext traffic disabled, with explicit development opt-in
 
 Important current boundary:
 
-- ClawFace is currently a mobile client with two transport paths: legacy bridge/mock (path A) and OpenClaw Gateway (path B, in progress).
-- The Gateway transport implementation covers connect, mobile Ed25519 device signing, SecureStore device-token persistence, send, subscribe, thread creation, session list hydration, Gateway-derived Agent Context, `hello-ok.policy` limit/tick consumption, non-throwing approval-resolution notices, and connected-device token revocation via `device.token.revoke`. Remaining CF-026 work is full mobile-app path B validation against a real local OpenClaw Gateway and any scoped presence-beacon polish.
+- ClawFace uses the OpenClaw Gateway transport exclusively.
+- The Gateway transport implementation covers connect, mobile Ed25519 device signing, SecureStore device-token persistence, send, subscribe, thread creation, session list hydration, Gateway-derived Agent Context, `hello-ok.policy` limit/tick consumption, non-throwing approval-resolution notices, and connected-device token revocation via `device.token.revoke`. Remaining CF-026 work is full mobile-app validation against a real local OpenClaw Gateway and any scoped presence-beacon polish.
 - OpenClaw's Gateway is the sole production transport for all OpenClaw clients (the legacy TCP bridge has been removed from OpenClaw). ClawFace connects to the same WebSocket surface as the CLI, web UI, and macOS app without requiring any OpenClaw-side changes.
-- The current client identity uses `openclaw-probe` / `probe` because OpenClaw validates client IDs/modes against built-in enums. A first-class `clawface-mobile` client ID is a candidate upstream request for correct presence visibility — it is not required for local M1 path A validation or authenticated Gateway probes.
+- The current client identity uses `openclaw-probe` / `probe` because OpenClaw validates client IDs/modes against built-in enums. A first-class `clawface-mobile` client ID is a candidate upstream request for correct presence visibility.
 - OpenClaw provides Bonjour/mDNS discovery (`_openclaw-gw._tcp`) and wide-area DNS-SD for LAN and Tailscale-based auto-discovery. ClawFace does not yet consume this but can do so for improved local pairing UX.
 - There is no production hosted relay/control plane yet.
-- The persisted agent model has an explicit `mode: 'direct' | 'relay'` field, optional `relayUrl`, and `transport: 'legacy-websocket' | 'openclaw-gateway'`; direct mode with either transport is the implemented/local path.
-- Relay transport is not implemented yet. Relay-mode agents currently fall back to the existing WebSocket transport with a warning until the hosted relay/control plane exists.
+- The persisted agent model has an explicit `mode: 'direct' | 'relay'` field, optional `relayUrl`, and `transport: 'openclaw-gateway'`; direct mode is the implemented/local path.
+- Relay transport is not implemented yet.
 - Hosted architecture described here is the target shape for future work, not shipped behaviour.
 
 ---

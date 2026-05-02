@@ -1,11 +1,10 @@
 # ClawFace Protocol Profile
 
 Status: Draft
-Profile revision: `0.7.0`
-OpenClaw Gateway Protocol: `v3` for path B
-Legacy bridge protocol: `0.5.0` for path A
+Profile revision: `0.8.0`
+OpenClaw Gateway Protocol: `v3`
 Created: 2026-04-27
-Updated: 2026-04-29
+Updated: 2026-05-02
 Transport investigation: 2026-04-29
 
 This document is now a **ClawFace profile/overlay**, not a complete parallel wire protocol. ClawFace's production-shaped OpenClaw path is to connect as an `operator` role client to the OpenClaw Gateway WebSocket Protocol. OpenClaw owns the Gateway frame format, handshake, authentication, method schemas, event schemas, scope checks, idempotency requirements, and device-token lifecycle.
@@ -18,9 +17,9 @@ Product architecture, trust boundaries, hosted relay responsibilities, and appro
 
 ## 1. Transport paths
 
-### Path B — OpenClaw Gateway Protocol profile
+### OpenClaw Gateway Protocol profile
 
-Path B is the long-term M1 shape: ClawFace connects directly to a locally-running or self-hosted OpenClaw Gateway, defaulting to `ws://127.0.0.1:18789`, as an `operator` role client over Gateway protocol v3.
+ClawFace connects directly to a locally-running or self-hosted OpenClaw Gateway, defaulting to `ws://127.0.0.1:18789`, as an `operator` role client over Gateway protocol v3.
 
 OpenClaw's Gateway WebSocket Protocol is the **single** control-plane and node transport for all OpenClaw clients (CLI, web UI, macOS app, iOS/Android nodes, headless nodes). The legacy TCP bridge has been removed from OpenClaw; `bridge.*` config keys are no longer in the Gateway schema. All current and future OpenClaw clients connect over this same WebSocket surface. ClawFace does not need to patch, fork, or extend OpenClaw to connect — it uses the existing Gateway exactly as the CLI, web UI, and macOS app do.
 
@@ -48,18 +47,9 @@ OpenClaw-owned details that this document intentionally does **not** duplicate:
 - Bonjour/mDNS service advertisement and TXT record schemas;
 - auth mode configuration (`token`, `password`, `trusted-proxy`, `tailscale`, `none`).
 
-### Path A — legacy ClawFace bridge/mock protocol
-
-Path A remains for local development and for users running the `openclaw agent` CLI without a Gateway:
-
-- `scripts/dev-server.js` — mock ClawFace dev server;
-- `scripts/openclaw-bridge.js` — local CLI adapter that shells out to `openclaw agent`.
-
-This protocol is still the contract for the currently shipped app transport in `services/transport/websocket.ts`, but it is now a legacy fallback rather than the target OpenClaw integration. Its last documented version is `0.5.0`; the preserved details are in [Appendix A](#appendix-a--legacy-path-a-bridge-and-mock-protocol-050).
-
 ---
 
-## 2. Path B Gateway profile
+## 2. Gateway profile
 
 ### Connect handshake
 
@@ -102,7 +92,7 @@ OpenClaw pairing does not require any OpenClaw-side modification for ClawFace. T
 
 The **only** ClawFace-specific part of pairing is how the user gets the token/URL onto the phone — the QR code scanning flow, paste input, or Bonjour auto-discovery. The Gateway protocol handshake is identical regardless.
 
-The first app pairing bridge accepts a ClawFace QR/paste payload with `transport: "openclaw-gateway"`, `host`, `port`, optional `secure`, optional display `context`, and optional `token` or `sessionKey` containing the Gateway-issued/approved operator credential. If a credential is present, the app stores it as an OpenClaw Gateway device token in SecureStore before connecting. If no credential is present, the app attempts the signed `connect.challenge` flow so OpenClaw can create a direct device-pairing approval request for the mobile device identity. A local tokenless signed probe on 2026-04-30 still returned `AUTH_TOKEN_MISSING` with `canRetryWithDeviceToken: false`, so this path is implemented client-side but not yet validated against the current local Gateway auth configuration. This is an interim local-M1 path that coexists with the OpenClaw bootstrap token format; it must not become a separate ClawFace auth protocol.
+The app pairing screen accepts a ClawFace QR/paste payload with `transport: "openclaw-gateway"`, `host`, `port`, optional `secure`, optional display `context`, and optional `token` or `sessionKey` containing the Gateway-issued/approved operator credential. If a credential is present, the app stores it as an OpenClaw Gateway device token in SecureStore before connecting. If no credential is present, the app attempts the signed `connect.challenge` flow so OpenClaw can create a direct device-pairing approval request for the mobile device identity. A local tokenless signed probe on 2026-04-30 still returned `AUTH_TOKEN_MISSING` with `canRetryWithDeviceToken: false`, so this path is implemented client-side but not yet validated against the current local Gateway auth configuration. This is an interim local-M1 path that coexists with the OpenClaw bootstrap token format; it must not become a separate ClawFace auth protocol.
 
 
 ### Gateway methods ClawFace expects to use
@@ -234,98 +224,4 @@ Current app transport types live in `services/transport/types.ts`. The future Ga
 
 ---
 
-## Appendix A — legacy path A bridge and mock protocol `0.5.0`
 
-The legacy ClawFace protocol uses JSON WebSocket messages with a required string `type` field.
-
-Current legacy endpoints:
-
-- `/pair` — one-shot pairing handshake;
-- `/agent` — persistent bidirectional agent control channel.
-
-### Legacy pairing `/pair`
-
-Pairing QR/paste payload:
-
-```ts
-interface PairingPayload {
-  v: 1;
-  host: string;
-  port: number;
-  fingerprint: string;
-  code: string;
-  name?: string;
-  secure?: boolean;
-  context?: AgentContext;
-}
-
-interface AgentContext {
-  repoPath?: string;
-  repoName?: string;
-  branch?: string;
-  agentSessionId?: string;
-  agentThreadId?: string;
-}
-```
-
-Client sends:
-
-```ts
-interface PairRequest {
-  type: 'pair';
-  code: string;
-  clientKey: string;
-}
-```
-
-Server responds:
-
-```ts
-interface PairSessionResponse {
-  type: 'session';
-  sessionKey: string;
-  fingerprint: string;
-  context?: AgentContext;
-}
-```
-
-The legacy dev server derives `sessionKey = HMAC-SHA256('dev-secret', clientKey)`. The OpenClaw bridge derives with its local fingerprint. The server must echo the expected `fingerprint`, and the app rejects mismatches.
-
-### Legacy agent channel `/agent`
-
-Ordering:
-
-- server may send `ready` immediately;
-- client must send `hello` before authenticated messages;
-- legacy `hello.clientVersion` is `0.5.0`;
-- `message_delta` chunks for one logical response are ordered on one socket;
-- if finalized, the final `message.id` must match the streamed `msgId`;
-- heartbeat is client-driven with `ping` / `pong`.
-
-Client messages:
-
-```ts
-type LegacyClientMessage =
-  | { type: 'hello'; sessionKey: string; clientVersion: '0.5.0' | string }
-  | { type: 'user_message'; threadId: string; text: string; tempId: number }
-  | { type: 'approval_decision'; threadId: string; msgId: number; reqId: string; decision: 'approved' | 'denied' }
-  | { type: 'create_thread'; agentId: string; title?: string; clientRequestId: string }
-  | { type: 'register_push'; token: string }
-  | { type: 'revoke_session' }
-  | { type: 'ping' };
-```
-
-Server messages:
-
-```ts
-type LegacyServerMessage =
-  | { type: 'ready' }
-  | { type: 'pong' }
-  | { type: 'message'; threadId: string; message: Message }
-  | { type: 'message_delta'; threadId: string; msgId: number; textDelta: string }
-  | { type: 'approval_request'; threadId: string; message: Message }
-  | { type: 'thread'; thread: Thread; clientRequestId?: string }
-  | { type: 'error'; error: string };
-```
-
-Legacy approvals use server-generated `message.reqId`; clients echo it in `approval_decision.reqId`. Servers process at most one decision per `reqId`.

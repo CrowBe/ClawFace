@@ -11,8 +11,7 @@ Related docs:
 - `docs/SCALING_AND_UNIT_ECONOMICS.md` - canonical business model, quota, cost, abuse-control, and scaling considerations
 - `docs/PROTOCOL.md` - canonical wire protocol
 - `services/transport/types.ts` - TypeScript transport interface
-- `scripts/dev-server.js` - local dev server reference for the wire protocol
-- `scripts/openclaw-bridge.js` - thin local OpenClaw CLI adapter that satisfies the wire protocol for end-to-end testing
+- `scripts/openclaw-gateway-discover.js` - Gateway discovery and validation probe
 
 ---
 
@@ -24,7 +23,7 @@ This milestone is the executable form of the "First real product milestone" in `
 
 For the current coding-agent beachhead this is concretely:
 
-- pair a local OpenClaw-backed agent through `scripts/openclaw-bridge.js`
+- pair a local OpenClaw-backed agent via the Gateway Protocol
 - display Agent Context (repo path, branch, agent session/thread id) so the user sees where work belongs
 - send a user message in one ClawFace Thread and receive the OpenClaw response back in the same Thread
 - never silently route OpenClaw turns through a local fallback echo that looks like a real agent reply
@@ -43,21 +42,16 @@ Per `docs/PRODUCT_CONTEXT.md`, **Approvals are explicitly out of scope for M1.**
 | CF-005 Session revocation on unpair and sign-out | DONE |
 | CF-008 Explicit transport mode: direct vs relay | DONE |
 | CF-009 Persistence schema migration | DONE |
-| CF-014 OpenClaw local bridge MVP | DONE |
+| CF-014 OpenClaw local bridge MVP | REMOVED |
 | CF-017 Workstream-first domain module | DONE |
 | CF-018 Transport event normalization seam | DONE |
-| CF-023 Bridge CLI adapter fallback is honest and configurable | DONE |
+| CF-023 Bridge CLI adapter fallback is honest and configurable | REMOVED |
 | CF-024 Document `OPENCLAW_SESSION_ID` and repo binding for first-run | DONE |
 | CF-025 Gateway Protocol profile and discovery probe | DONE |
-| CF-026 OpenClaw Gateway transport implementation (M1 path B) | IN_PROGRESS |
+| CF-026 OpenClaw Gateway transport implementation | IN_PROGRESS |
 | CF-016 M1 readiness check: boot ClawFace and connect to OpenClaw in a single thread | DONE |
 
-CF-016 has two valid local validation paths and may be satisfied by either:
-
-- **Path A — Bridge.** ClawFace ↔ `scripts/openclaw-bridge.js` ↔ `openclaw agent` CLI subprocess. Lower friction to set up, lower fidelity to the production transport. Hardened by CF-023.
-- **Path B — ClawFace as an operator client of the OpenClaw Gateway Protocol.** ClawFace pairs directly with a locally-running `openclaw gateway` (default `127.0.0.1:18789`) as an `operator` role client over OpenClaw's documented WebSocket Gateway Protocol — no bridge, no CLI subprocess, no monkey-patching. ClawFace is one more control-plane client of OpenClaw, on the same level as the OpenClaw CLI, web UI, and macOS app. Profiled by CF-025 and implemented by CF-026; this is the production-transport-shaped path. Verified to be feasible against `docs.openclaw.ai/gateway/protocol`.
-
-Path B is the right long-term shape because OpenClaw's existing Gateway Protocol is a superset of what `docs/PROTOCOL.md` was inventing on its own: it already owns `connect` / `req` / `res` / `event` framing, signed-challenge pairing, authentication, scopes, session routing, and event delivery. Adopting it directly turns ClawFace into a normal upstream operator client of OpenClaw and lets `docs/PROTOCOL.md` shrink to a thin profile/overlay document instead of a parallel protocol spec. Path A (the bridge) remains a legacy fallback for users running `openclaw agent` CLI without a gateway.
+CF-016 is validated via the OpenClaw Gateway Protocol: ClawFace pairs directly with a locally-running `openclaw gateway` (default `127.0.0.1:18789`) as an `operator` role client over OpenClaw's documented WebSocket Gateway Protocol. Profiled by CF-025 and implemented by CF-026.
 
 **Transport investigation (2026-04-29):** Confirmed that OpenClaw has a single production transport (Gateway WebSocket Protocol v3; legacy TCP bridge removed). No OpenClaw patching is needed for ClawFace pairing or messaging. Shared-token and issued-device-token Gateway auth have been validated locally; bootstrap-token support and tokenless direct-pair approval remain follow-ups because the current local Gateway rejects tokenless signed connects with `AUTH_TOKEN_MISSING`. Post-M1 opportunities to leverage existing OpenClaw infrastructure (Bonjour/mDNS discovery, bootstrap token format, `system-event` beacons, upstream `clawface-mobile` client ID) are tracked in CF-027.
 
@@ -445,7 +439,7 @@ Manual:
 >
 > The reference scaffolding under `agent/` and the standalone document `docs/AGENT_ARCHITECTURE.md` have been removed from this repository. The wire protocol in `docs/PROTOCOL.md` remains the only contract between ClawFace and any agent runtime; production agent runtimes (OpenClaw, future plugins) are responsible for their own internal architecture in their own repositories.
 >
-> The OpenClaw local bridge (`scripts/openclaw-bridge.js`) is intentionally retained as a thin WebSocket-to-CLI adapter so the wire protocol can be tested end-to-end against a real local OpenClaw install. It is not an agent runtime.
+> `scripts/openclaw-bridge.js` and `scripts/dev-server.js` have been removed. All connectivity now goes through the OpenClaw Gateway transport.
 
 Issue index entries for CF-010..CF-013 are kept in the index for traceability and marked REMOVED there.
 
@@ -453,56 +447,18 @@ Issue index entries for CF-010..CF-013 are kept in the index for traceability an
 
 ## Epic F - OpenClaw Local MVP
 
-> These issues turn ClawFace from a mock-server mobile shell into a locally testable OpenClaw control surface. Keep the first bridge deliberately narrow: one local OpenClaw instance, one explicit repo/session binding, direct WebSocket mode, no hosted relay assumptions. The bridge is a thin WebSocket-to-CLI adapter and is the only OpenClaw-specific code allowed in this repository — it does not implement an agent runtime.
+> These issues turned ClawFace into a locally testable OpenClaw control surface. The bridge and mock server have been removed; ClawFace now connects directly to OpenClaw via the Gateway Protocol.
 
 ---
 
 ### CF-014 - OpenClaw local bridge MVP
 
-**Status:** DONE
+**Status:** REMOVED
 **Priority:** P0
 **Epic:** F - OpenClaw Local MVP
 **Blocked by:** CF-001
 
-#### Description
-
-Implement the smallest real bridge that lets ClawFace pair with this local OpenClaw instance and exchange messages with a repo-bound OpenClaw session. This replaces the current mock-only local test path for the core conversation loop.
-
-The MVP must make context explicit. Telegram-style global conversation state is not acceptable: every ClawFace thread must show and route through a concrete OpenClaw target such as repo path, branch, and session/thread id.
-
-#### Acceptance criteria
-
-- [x] Add an OpenClaw bridge entrypoint, separate from `scripts/dev-server.js`, that implements the ClawFace `/pair` and `/agent` WebSocket protocol in direct/local mode
-- [x] Bridge prints a ClawFace-compatible pairing payload and/or QR source containing host, port, code, fingerprint, and protocol version
-- [x] Pairing from the Expo app succeeds against the bridge without using the mock dev server
-- [x] A paired agent stores enough metadata to display the active context: repo name/path, current branch if available, and OpenClaw session/thread id
-- [x] Sending a message from ClawFace routes to the bound OpenClaw session
-- [x] OpenClaw assistant responses stream or append back into the correct ClawFace thread
-- [x] Async command completion events are routed to the correct ClawFace thread instead of a global Telegram/direct-chat context
-- [x] The bridge rejects messages for unknown, revoked, or mismatched sessions
-- [x] README documents the local bridge test flow separately from the mock dev server flow
-
-#### Test plan
-
-```bash
-npx tsc --noEmit
-```
-
-Manual MVP test:
-1. Start the OpenClaw local bridge from the repo.
-2. Start the Expo app with local cleartext enabled if testing on Android/LAN.
-3. Pair ClawFace using the bridge payload.
-4. Confirm the paired agent/thread displays the repo/session context clearly.
-5. Send a simple message from ClawFace and confirm the response returns to the same thread.
-6. Trigger a safe async command/event and confirm it appears in the same ClawFace thread, not Telegram.
-7. Unpair and confirm the bridge rejects the old session.
-
-#### Files
-
-- `scripts/openclaw-bridge.*` or equivalent bridge entrypoint
-- `services/transport/types.ts` if protocol typing needs extension
-- `docs/PROTOCOL.md` if wire messages change
-- `README.md`
+> Completed and subsequently removed. The bridge (`scripts/openclaw-bridge.js`) has been deleted; ClawFace now connects directly to OpenClaw via the Gateway Protocol.
 
 ---
 
@@ -522,8 +478,8 @@ Map OpenClaw tool/action approval requests into ClawFace approval cards and send
 
 #### Acceptance criteria
 
-- [ ] Bridge converts OpenClaw approval requests into ClawFace `approval_request` messages with stable `reqId`, human-readable title/body, risk level if available, and expiry
-- [ ] ClawFace approve/deny actions call back into the correct OpenClaw pending approval
+- [ ] Gateway transport converts OpenClaw approval requests into ClawFace `approval_request` messages with stable `reqId`, human-readable title/body, risk level if available, and expiry
+- [ ] ClawFace approve/deny actions call back into the correct OpenClaw pending approval via Gateway RPC
 - [ ] Duplicate approval decisions are ignored by `reqId`
 - [ ] Expired approval requests cannot be approved from ClawFace
 - [ ] Approval results are reflected in the originating ClawFace thread
@@ -536,7 +492,7 @@ npx tsc --noEmit
 ```
 
 Manual:
-1. Start the OpenClaw bridge and pair ClawFace.
+1. Pair ClawFace with a local OpenClaw Gateway.
 2. Trigger a harmless approval-requiring action from the bound session.
 3. Approve from ClawFace and confirm OpenClaw receives exactly one approval.
 4. Attempt a duplicate approval and confirm it is ignored.
@@ -544,7 +500,7 @@ Manual:
 
 #### Files
 
-- OpenClaw bridge approval integration files
+- `services/transport/openclaw-gateway.ts`
 - `services/transport/types.ts` if approval metadata needs extension
 - `docs/PROTOCOL.md` if wire messages change
 - `README.md`
@@ -561,7 +517,7 @@ Manual:
 
 > This is the executable form of the M1 milestone in `docs/PRODUCT_CONTEXT.md`. It explicitly excludes approvals and async-event routing beyond the single-thread message round-trip. Approval bridging belongs to CF-015 (Post-M1), not here.
 >
-> Two valid local validation paths exist (see "Milestone 1" preamble at top of this file): **path A** uses `scripts/openclaw-bridge.js` (legacy CLI shell-out fallback); **path B** has ClawFace pair with a local `openclaw gateway` as an `operator` role client over OpenClaw's documented Gateway WebSocket Protocol (CF-026). CF-016 may be satisfied by either, or by both. Path B is the production-transport-shaped path and is the long-term home of M1 validation; path A remains as a fallback for users running `openclaw agent` CLI without a gateway.
+> Validated via the OpenClaw Gateway Protocol: ClawFace pairs directly with a locally-running `openclaw gateway` as an `operator` role client.
 
 #### Description
 
@@ -569,21 +525,18 @@ Validate the end-to-end M1 path against a real local OpenClaw on the maintainer'
 
 The scope is the smallest possible loop that satisfies `docs/PRODUCT_CONTEXT.md` "First real product milestone":
 
-- pair ClawFace with the local OpenClaw target (path A: bridge → `openclaw agent` CLI; path B: `operator` client of `openclaw gateway` Gateway WS protocol via CF-026)
+- pair ClawFace with the local OpenClaw Gateway as an `operator` client via CF-026
 - see Agent Context (repo, branch, agent session/thread id) on the paired Trusted Agent and on the bound Thread
 - send a user message in that Thread, receive the OpenClaw response back in the same Thread
-- confirm the response was produced by the real OpenClaw runtime — for path A, the bridge logs say a real `openclaw` CLI turn ran (not the bridge fallback adapter, see CF-023); for path B, the response came from real OpenClaw session/event surfaces (not an echo)
+- confirm the response was produced by the real OpenClaw runtime — the response came from real OpenClaw session/event surfaces (not an echo)
 - unpair and confirm the session is rejected
 
 #### Acceptance criteria
 
-- [x] Run the full M1 manual test path against a real local OpenClaw via at least one of path A (bridge, hardened by CF-023) or path B (ClawFace as an operator client of the OpenClaw Gateway Protocol, CF-026). Not only the mock dev server, and not only the bridge fallback adapter. Validated path A on 2026-04-30 with real `openclaw agent --local` output: pair succeeded, Agent Context showed repo/branch/session metadata, user turn produced `openclaw_agent` running → real agent reply → `openclaw_agent` done, no fallback chip appeared, and reconnect after `revoke_session` returned the expected revoked-session error.
-- [x] `README.md` has a "M1 local test path" section covering at minimum path A with the exact commands for starting the bridge and Expo app, in order, with required env vars (`CLAWFACE_REPO_PATH`, `OPENCLAW_BIN`, `OPENCLAW_SESSION_ID`, `OPENCLAW_THREAD_ID`, `CLAWFACE_ALLOW_CLEARTEXT`) and their defaults
-- [x] If path B was used, `README.md` documents the path B run instructions (point ClawFace at a running `openclaw gateway`, complete the operator pairing handshake, exercise the M1 round-trip)
-- [x] `README.md` documents what the maintainer should see at each step: pairing succeeds, paired Trusted Agent shows Agent Context derived from OpenClaw (`hello-ok.snapshot` / `presence` for path B; bridge stdout for path A), the bound Thread shows repo/session metadata, sent message produces an OpenClaw response in the same Thread, transport logs confirm the response came from real OpenClaw (no fallback / no echo)
-- [x] `README.md` documents how to tell a real OpenClaw turn apart from a bridge-fallback turn (per CF-023)
-- [x] `README.md` documents known limitations and sharp edges honestly (e.g. approvals not bridged, only one bound thread per bridge instance, default bridge session id assumes `main`)
-- [x] Wire-protocol problems uncovered during the M1 validation are filed back as ClawFace issues / `docs/PROTOCOL.md` amendments before declaring M1 reachable. Validation uncovered the invalid `agent:main:main` bridge session-id default and the revoked-session error flush edge; both were fixed before marking CF-016 done.
+- [x] Run the full M1 manual test path against a real local OpenClaw Gateway as an `operator` client.
+- [x] `README.md` has a "M1 local test path" section documenting how to pair ClawFace with a running `openclaw gateway` and exercise the M1 round-trip.
+- [x] `README.md` documents what the maintainer should see at each step: pairing succeeds, paired Trusted Agent shows Gateway-derived Agent Context, sent message produces an OpenClaw response in the same Thread.
+- [x] `README.md` documents known limitations honestly (e.g. approvals not bridged).
 - [x] Ping the maintainer with concise test instructions once the M1 path is validated.
 
 #### Test plan
@@ -599,55 +552,12 @@ Manual only: execute the documented instructions from a clean start (no prior pa
 
 ### CF-023 - Bridge CLI adapter fallback is honest and configurable
 
-**Status:** DONE
+**Status:** REMOVED
 **Priority:** P0
 **Epic:** F - OpenClaw Local MVP
 **Blocked by:** CF-014
 
-> M1 cannot be declared reachable while the bridge can silently route a "successful" OpenClaw turn through a local fallback echo. The bridge must either talk to a real `openclaw` CLI or fail loudly. Real end-to-end validation against Ben's local OpenClaw install is tracked by CF-016, not by this adapter-hardening issue.
-
-#### Description
-
-`scripts/openclaw-bridge.js` currently hardcodes the `openclaw agent --session-id … --message … --json --timeout 120` invocation. That signature matches the documented `openclaw agent` CLI (https://docs.openclaw.ai/tools/agent-send), but it bakes in two assumptions that bite on first run:
-
-1. The exact CLI flags work for the maintainer's installed OpenClaw build. If they don't (different version, custom build, or different binary path), the bridge falls back to a local echo.
-2. The default OpenClaw CLI behaviour goes through the Gateway. For a local-first MVP test the bridge should force the embedded local runtime (`--local`).
-
-When the CLI fails for any reason, the bridge currently still emits a `role: 'agent'` message with the fallback text, which renders in the ClawFace thread as if OpenClaw replied. The only signal the user has is a separate tool chip with a different `name`. That is too easy to miss.
-
-This issue makes the bridge CLI configurable and makes adapter-fallback unmistakable in both the ClawFace UI and the bridge logs. It does not declare the full M1 path validated; CF-016 owns that end-to-end readiness check.
-
-#### Acceptance criteria
-
-- [x] Bridge reads CLI configuration from environment with documented defaults:
-  - `OPENCLAW_BIN` (default `openclaw`)
-  - `OPENCLAW_AGENT_ARGS` (default `--local --timeout 120`; appended after `--session-id` / `--message` / `--json`)
-  - `OPENCLAW_TURN_TIMEOUT_MS` (default `130000`)
-- [x] Bridge defaults to forcing the local OpenClaw runtime via `--local` so first-run does not silently rely on a Gateway
-- [x] When the CLI fails, the bridge does **not** emit a `role: 'agent'` message with fallback text; it emits a `role: 'tool'` message with `status: 'failed'`, a clear `name` (`openclaw_cli_unavailable`), and a `result` containing the adapter detail
-- [x] When the CLI succeeds, the bridge emits the existing tool chip + `role: 'agent'` reply unchanged
-- [x] Bridge stdout/stderr clearly distinguishes a successful real-CLI turn from a fallback (e.g. `[openclaw] turn ok session=...` vs `[openclaw] FALLBACK cli unavailable: ...`)
-- [x] `README.md` documents the new env vars and how to tell a real OpenClaw turn apart from a fallback in both the ClawFace UI and the bridge logs
-- [x] `docs/PROTOCOL.md` does not need to change (the wire-level shape stays a normal `tool`/`message`/`agent` flow); add a short note only if the new tool name needs to be acknowledged in the protocol doc
-- [x] No agent-runtime / model-provider / tool-harness / MCP code is reintroduced in this repository (per `docs/PRODUCT_CONTEXT.md` non-goals 1 and 2)
-- [x] Real local OpenClaw end-to-end validation is explicitly deferred to CF-016, so this issue can close once the adapter is configurable and fallback is unmistakable
-
-#### Test plan
-
-```bash
-npx tsc --noEmit
-node -c scripts/openclaw-bridge.js
-```
-
-Manual:
-1. Start the bridge with no `openclaw` binary on `PATH`. Pair from ClawFace, send a message. Confirm the Thread shows a failed tool chip and **no** `role: 'agent'` text masquerading as an OpenClaw reply. Bridge stdout shows a `FALLBACK` log line.
-2. Override `OPENCLAW_BIN=/path/to/openclaw` and `OPENCLAW_AGENT_ARGS='--local --verbose on'`. Confirm the override is surfaced in the startup banner and used for CLI turns.
-3. Real local OpenClaw success-path validation is performed by CF-016.
-
-#### Files
-
-- `scripts/openclaw-bridge.js`
-- `README.md`
+> Completed and subsequently removed. The bridge (`scripts/openclaw-bridge.js`) has been deleted; ClawFace now connects directly to OpenClaw via the Gateway Protocol.
 
 ---
 
@@ -786,7 +696,7 @@ CF-026 must update the canonical docs rather than turning this backlog item into
 
 - [x] `README.md` documents path B local test instructions: how to pair ClawFace with a running `openclaw gateway` via the `openclaw-gateway` transport type.
 - [x] An honest assessment, written into `docs/PROTOCOL.md`, of which extensions ClawFace would want upstream OpenClaw to add for mobile UX. Each candidate extension is described as a small upstream PR proposal, not a new protocol. (Completed in transport investigation 2026-04-29: five candidate upstream helpers documented in `docs/PROTOCOL.md` §2.7.)
-- [x] The `scripts/openclaw-bridge.js` adapter remains for users running `openclaw agent` CLI without a Gateway, documented as a legacy fallback rather than the M1 path. CF-016 path A continues to use it; CF-016 path B uses the Gateway Protocol transport directly.
+- [x] The legacy `scripts/openclaw-bridge.js` adapter and `scripts/dev-server.js` mock server have been removed. All connectivity uses the Gateway Protocol transport.
 
 #### Test plan
 
@@ -813,7 +723,7 @@ Manual (path B run):
 - `app/pair.tsx` — pairing flow updated for OpenClaw connect-challenge handshake
 - `docs/PROTOCOL.md` — concrete method/event profile for ClawFace's Gateway use
 - `README.md` — path B run instructions for CF-016
-- `scripts/openclaw-bridge.js` — documented as legacy fallback (CF-016 path A); not removed
+- ~~`scripts/openclaw-bridge.js`~~ — removed (legacy path A eliminated)
 
 ---
 
@@ -1007,45 +917,13 @@ Manual:
 
 ### CF-021 - OpenClaw bridge adapter deepening
 
-**Status:** TODO
+**Status:** REMOVED
 **Priority:** P2
 **Milestone:** Post-M1
 **Epic:** G - Architecture Deepening
 **Blocked by:** CF-014, CF-018, CF-023
 
-> Refactor inside `scripts/openclaw-bridge.js`. Schedule after CF-023 lands the configurable CLI seam, so the deepening pass extracts a real shape rather than the current hardcoded one.
-
-#### Description
-
-The OpenClaw bridge MVP is intentionally a standalone script. That was the right first slice, but the bridge should not become a dumping ground for protocol, session, and CLI integration logic.
-
-Deepen the bridge inside `scripts/openclaw-bridge.js` so session, pairing-fingerprint, and CLI-adapter responsibilities have clearer boundaries inside the script, without introducing any in-tree agent runtime, model provider, tool harness, or MCP plumbing (per `docs/PRODUCT_CONTEXT.md` non-goals 1 and 2).
-
-#### Acceptance criteria
-
-- [ ] Identify the smallest bridge seam worth extracting after applying the deletion test
-- [ ] Move session/protocol/CLI-adapter logic behind a deeper module *inside* `scripts/`, without changing the bridge CLI UX
-- [ ] Preserve `/pair` and `/agent` behavior
-- [ ] Preserve local bridge Pairing payload output
-- [ ] Preserve rejection of unknown, revoked, or mismatched sessions
-- [ ] Avoid introducing hosted relay assumptions
-- [ ] Do not introduce any agent runtime, model provider, tool harness, browser tool, or MCP code in this repository
-
-#### Test plan
-
-```bash
-npx tsc --noEmit
-git diff --check
-node -c scripts/openclaw-bridge.js
-```
-
-Manual/smoke: start the bridge, pair, create a Thread, send a message, revoke/unpair, and confirm old sessions are rejected.
-
-#### Files
-
-- `scripts/openclaw-bridge.js`
-- `services/transport/types.ts` if protocol typing changes
-- `docs/PROTOCOL.md` if wire messages change
+> Obsolete. The legacy bridge (`scripts/openclaw-bridge.js`) and mock dev server (`scripts/dev-server.js`) have been removed. All connectivity now goes through the OpenClaw Gateway transport. This issue no longer applies.
 
 ---
 

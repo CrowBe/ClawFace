@@ -8,7 +8,7 @@ export interface AgentContext {
   agentThreadId?: string;
 }
 
-export type AgentTransportKind = 'legacy-websocket' | 'openclaw-gateway';
+export type AgentTransportKind = 'openclaw-gateway';
 
 export interface Agent {
   id: string;

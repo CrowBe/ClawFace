@@ -12,7 +12,7 @@ ClawFace is an Expo mobile **AI agent operations app**: a mobile command surface
 - [docs/SCALING_AND_UNIT_ECONOMICS.md](docs/SCALING_AND_UNIT_ECONOMICS.md) covers market positioning, business model, cost drivers, quotas, abuse controls, and scaling scenarios.
 - [docs/BACKLOG.md](docs/BACKLOG.md) is the executable architecture backlog. It should point to canonical docs, not redefine architecture.
 - Do not create overlapping architecture/business planning docs. Update the canonical doc for the concern instead.
-- ClawFace does not implement an agent runtime, model provider, tool harness, or MCP server in this repository (per `docs/PRODUCT_CONTEXT.md` non-goals 1 and 2). Production agent runtimes (OpenClaw, future plugins) own their own architecture and live in their own repositories. The only stable contract is `docs/PROTOCOL.md`. `scripts/openclaw-bridge.js` is a thin local WebSocket-to-CLI adapter for end-to-end testing, not an agent runtime.
+- ClawFace does not implement an agent runtime, model provider, tool harness, or MCP server in this repository (per `docs/PRODUCT_CONTEXT.md` non-goals 1 and 2). Production agent runtimes (OpenClaw, future plugins) own their own architecture and live in their own repositories. The only stable contract is `docs/PROTOCOL.md`.
 
 ## Stack
 
@@ -74,7 +74,7 @@ Safe-area handling: screens call `useSafeAreaInsets()` and apply padding manuall
 ## Status & direction
 
 - **UI polish and real agent transport are both in scope.** Design parity with the original mockups is close but not final; hardening the real pairing/transport path is the next major thrust.
-- The app now has AsyncStorage persistence, SecureStore session-key and Gateway device token handling, legacy WebSocket transport, OpenClaw Gateway transport (path B, in progress), and bundled dev/bridge pairing servers. Treat the dev server and bridge as local test infrastructure, not production hosted architecture.
+- The app now has AsyncStorage persistence, SecureStore session-key and Gateway device token handling, and the OpenClaw Gateway transport. All connectivity goes through the Gateway.
 - The OpenClaw Gateway transport (`services/transport/openclaw-gateway.ts`) implements Gateway Protocol v3 connect, `sessions.send`, `sessions.messages.subscribe`, and `sessions.create`. Gateway approval resolution, mobile device signing, and device token revocation via RPC are not yet wired.
 - Future hosted relay/control-plane work must follow [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/SCALING_AND_UNIT_ECONOMICS.md](docs/SCALING_AND_UNIT_ECONOMICS.md). Do not duplicate those decisions here.
 

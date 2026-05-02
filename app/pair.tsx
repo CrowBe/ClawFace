@@ -5,11 +5,9 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import * as Crypto from 'expo-crypto';
 import { useStore } from '@/store';
-import { setGatewayDeviceToken, setSessionKey } from '@/services/secureStore';
-import { registerForPushNotifications } from '@/services/notifications';
-import { resolveTransport, wsTransport } from '@/services/transport';
+import { setGatewayDeviceToken } from '@/services/secureStore';
+import { resolveTransport } from '@/services/transport';
 import { CloseIcon, CheckIcon } from '@/components/Icons';
 import { C } from '@/constants/colors';
 
@@ -25,19 +23,12 @@ interface PairingPayload {
   v: 1 | 2;
   host: string;
   port: number;
-  fingerprint?: string;
-  code?: string;
-  transport?: 'legacy-websocket' | 'openclaw-gateway';
+  transport: 'openclaw-gateway';
   token?: string;
   sessionKey?: string;
   name?: string;
   secure?: boolean;
   context?: AgentContext;
-}
-
-function agentWsUrl(payload: PairingPayload, path: '/pair' | '/agent'): string {
-  const protocol = payload.secure ? 'wss' : 'ws';
-  return `${protocol}://${payload.host}:${payload.port}${path}`;
 }
 
 function parsePairingPayload(raw: string): PairingPayload | null {
@@ -51,10 +42,7 @@ function parsePairingPayload(raw: string): PairingPayload | null {
       (obj.v === 1 || obj.v === 2) &&
       typeof obj.host === 'string' &&
       typeof obj.port === 'number' &&
-      (
-        obj.transport === 'openclaw-gateway' ||
-        (typeof obj.fingerprint === 'string' && typeof obj.code === 'string')
-      )
+      obj.transport === 'openclaw-gateway'
     ) {
       return obj as unknown as PairingPayload;
     }
@@ -91,80 +79,14 @@ export default function PairScreen() {
     setStage('pairing');
 
     try {
-      if (payload.transport === 'openclaw-gateway') {
-        const token = payload.token ?? payload.sessionKey;
-        const name = payload.name ?? (agentName || 'OpenClaw Gateway');
-        const context = payload.context;
-        const agent = addAgent(name, payload.host, undefined, payload.port, payload.secure, context, 'openclaw-gateway');
-        if (token) await setGatewayDeviceToken(agent.id, token);
-        await resolveTransport(agent).connect(agent);
-        setPairedAgentId(agent.id);
-        setAgentName(name);
-        setStage('done');
-        return;
-      }
-
-      const randomBytes = await Crypto.getRandomBytesAsync(32);
-      // Sent during pairing so the server can bind the issued session key to this client.
-      const clientKey = Array.from(randomBytes).map(b => b.toString(16).padStart(2, '0')).join('');
-
-      const ws = new WebSocket(agentWsUrl(payload, '/pair'));
-
-      await new Promise<void>((resolve, reject) => {
-        const timer = setTimeout(() => {
-          ws.close();
-          reject(new Error('Pairing handshake timed out'));
-        }, 10000);
-
-        ws.onopen = () => {
-          ws.send(JSON.stringify({ type: 'pair', code: payload.code, clientKey }));
-        };
-
-        ws.onmessage = async (event) => {
-          clearTimeout(timer);
-          try {
-            const msg = JSON.parse(event.data as string) as Record<string, unknown>;
-            if (msg.type === 'session' && typeof msg.sessionKey === 'string') {
-              if (payload.fingerprint && msg.fingerprint !== payload.fingerprint) {
-                reject(new Error('Fingerprint mismatch - possible rogue server'));
-                ws.close();
-                return;
-              }
-
-              const name = payload.name ?? agentName;
-              const context = (msg.context && typeof msg.context === 'object' ? msg.context : payload.context) as AgentContext | undefined;
-              const agent = addAgent(name || 'Agent', payload.host, msg.sessionKey, payload.port, payload.secure, context);
-              await setSessionKey(agent.id, msg.sessionKey);
-              wsTransport.setSessionKey(agent.id, msg.sessionKey);
-              setPairedAgentId(agent.id);
-              setAgentName(name || '');
-
-              const pushToken = await registerForPushNotifications().catch(() => null);
-              if (pushToken) {
-                const agentWs = new WebSocket(agentWsUrl(payload, '/agent'));
-                agentWs.onopen = () => {
-                  agentWs.send(JSON.stringify({ type: 'hello', sessionKey: msg.sessionKey, clientVersion: '0.5.0' }));
-                  agentWs.send(JSON.stringify({ type: 'register_push', token: pushToken }));
-                  agentWs.close();
-                };
-              }
-
-              ws.close();
-              resolve();
-            } else if (msg.type === 'error') {
-              reject(new Error((msg.error as string) ?? 'Pairing rejected by server'));
-            } else {
-              reject(new Error('Unexpected server message during pairing'));
-            }
-          } catch (e) {
-            reject(e);
-          }
-        };
-
-        ws.onerror = () => reject(new Error('WebSocket connection failed'));
-        ws.onclose = () => {};
-      });
-
+      const token = payload.token ?? payload.sessionKey;
+      const name = payload.name ?? (agentName || 'OpenClaw Gateway');
+      const context = payload.context;
+      const agent = addAgent(name, payload.host, undefined, payload.port, payload.secure, context, 'openclaw-gateway');
+      if (token) await setGatewayDeviceToken(agent.id, token);
+      await resolveTransport(agent).connect(agent);
+      setPairedAgentId(agent.id);
+      setAgentName(name);
       setStage('done');
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Unknown pairing error';
