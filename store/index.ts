@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { SEED_AGENTS, SEED_THREADS, type Agent, type AgentContext, type Thread, type Message } from '@/data/seed';
-import { mockTransport, openClawGatewayTransport, resolveTransport, wsTransport, type TransportListener } from '@/services/transport';
+import { mockTransport, openClawGatewayTransport, resolveTransport, type TransportListener } from '@/services/transport';
 import { debouncedDehydrate, clearPersistedState } from '@/services/persistence';
 import { deleteSessionKey, getSessionKey } from '@/services/secureStore';
 import { scheduleLocalApprovalNotification } from '@/services/notifications';
@@ -114,10 +114,9 @@ function applyTransportEvent(store: { getState: () => State }, event: Parameters
 
 function subscribeToTransport(store: { getState: () => State }) {
   const unsubMock = mockTransport.subscribe(event => applyTransportEvent(store, event));
-  const unsubWs = wsTransport.subscribe(event => applyTransportEvent(store, event));
   const unsubGateway = openClawGatewayTransport.subscribe(event => applyTransportEvent(store, event));
 
-  return () => { unsubMock(); unsubWs(); unsubGateway(); };
+  return () => { unsubMock(); unsubGateway(); };
 }
 
 export const useStore = create<State>((set, get) => ({
@@ -193,11 +192,11 @@ export const useStore = create<State>((set, get) => ({
     transport.sendMessage(agent.id, threadId, text).catch(() => {});
   },
 
-  addAgent: (name, host, sessionKey, port, secure, context, transportKind = 'legacy-websocket') => {
+  addAgent: (name, host, sessionKey, port, secure, context, transportKind = 'openclaw-gateway') => {
     const id = 'agent-' + Date.now();
     const newAgent: Agent = {
       id, name, mono: name.slice(0, 2).toUpperCase(), tint: '#E4DBEC',
-      role: transportKind === 'openclaw-gateway' ? 'OpenClaw Gateway' : 'newly paired', host, mode: 'direct', transport: transportKind, online: true, paired: 'just now', folders: false,
+      role: 'OpenClaw Gateway', host, mode: 'direct', transport: transportKind, online: true, paired: 'just now', folders: false,
       perms: { read: true, write: 'ask', shell: 'ask', network: true },
       notifs: { approvals: 'push+sound', completions: 'silent', mentions: 'push' },
       sessionKey,
@@ -211,11 +210,6 @@ export const useStore = create<State>((set, get) => ({
       toast: `Paired ${name}`,
     }));
     setTimeout(() => set({ toast: null }), 2200);
-
-    if (transportKind !== 'openclaw-gateway') {
-      const transport = resolveTransport(newAgent);
-      transport.connect(newAgent).catch(() => {});
-    }
 
     return newAgent;
   },
@@ -272,7 +266,6 @@ export const useStore = create<State>((set, get) => ({
       (saved.agents.length ? saved.agents : store.agents).map(async agent => {
         const sessionKey = await getSessionKey(agent.id).catch(() => null);
         if (!sessionKey && agent.transport !== 'openclaw-gateway') return { ...agent, sessionKey: undefined, online: false };
-        if (sessionKey) wsTransport.setSessionKey(agent.id, sessionKey);
         const hydratedAgent = { ...agent, sessionKey: sessionKey ?? undefined, online: false };
         resolveTransport(hydratedAgent).connect(hydratedAgent).catch(() => {});
         return hydratedAgent;

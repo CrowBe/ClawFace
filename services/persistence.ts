@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SEED_AGENTS, SEED_THREADS, type Agent, type AgentContext, type Thread } from '@/data/seed';
 
 const STORAGE_KEY = 'clawface_state';
-const SCHEMA_VERSION = 4;
+const SCHEMA_VERSION = 5;
 
 interface PersistedState {
   version: number;
@@ -21,6 +21,8 @@ type LegacyAgentContext = AgentContext & {
   openclawSessionId?: string;
   openclawThreadId?: string;
 };
+
+type LegacyTransportKind = 'legacy-websocket' | 'openclaw-gateway';
 
 export async function hydrateState(): Promise<{ agents: Agent[]; threads: Thread[]; currentAgentId: string } | null> {
   try {
@@ -49,6 +51,9 @@ function migrateState(state: PersistedAppState, fromVersion: number): PersistedA
   }
   if (fromVersion < 4) {
     next = migrateV3ToV4(next);
+  }
+  if (fromVersion < 5) {
+    next = migrateV4ToV5(next);
   }
 
   return next;
@@ -107,9 +112,22 @@ function migrateV3ToV4(state: PersistedAppState): PersistedAppState {
       return {
         ...persisted,
         mode: persisted.mode ?? 'direct',
-        transport: persisted.transport ?? 'legacy-websocket',
+        transport: persisted.transport ?? 'openclaw-gateway',
       } satisfies Agent;
     }),
+  };
+}
+
+// V4 -> V5: remove legacy-websocket transport; all agents become openclaw-gateway.
+function migrateV4ToV5(state: PersistedAppState): PersistedAppState {
+  return {
+    ...state,
+    agents: state.agents.map(agent => ({
+      ...agent,
+      transport: ((agent as unknown as Record<string, unknown>).transport === 'legacy-websocket'
+        ? 'openclaw-gateway'
+        : agent.transport) ?? 'openclaw-gateway',
+    })),
   };
 }
 
