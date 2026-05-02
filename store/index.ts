@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { SEED_AGENTS, SEED_THREADS, type Agent, type AgentContext, type Thread, type Message } from '@/data/seed';
-import { mockTransport, openClawGatewayTransport, resolveTransport, type TransportListener } from '@/services/transport';
+import { openClawGatewayTransport, resolveTransport, type TransportListener } from '@/services/transport';
 import { debouncedDehydrate, clearPersistedState } from '@/services/persistence';
 import { deleteSessionKey, getSessionKey } from '@/services/secureStore';
 import { scheduleLocalApprovalNotification } from '@/services/notifications';
@@ -113,10 +113,9 @@ function applyTransportEvent(store: { getState: () => State }, event: Parameters
 }
 
 function subscribeToTransport(store: { getState: () => State }) {
-  const unsubMock = mockTransport.subscribe(event => applyTransportEvent(store, event));
   const unsubGateway = openClawGatewayTransport.subscribe(event => applyTransportEvent(store, event));
 
-  return () => { unsubMock(); unsubGateway(); };
+  return () => { unsubGateway(); };
 }
 
 export const useStore = create<State>((set, get) => ({
