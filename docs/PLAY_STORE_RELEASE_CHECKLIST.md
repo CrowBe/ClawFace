@@ -26,8 +26,8 @@ This checklist tracks the non-code release work for CF-028. It complements `docs
 - [ ] App icon: 512 × 512 PNG.
 - [ ] Feature graphic: 1024 × 500 PNG.
 - [ ] At least two Android device screenshots.
-- [ ] Short description drafted.
-- [ ] Full description drafted.
+- [x] Short description drafted in `docs/PLAY_STORE_LISTING.md`.
+- [x] Full description drafted in `docs/PLAY_STORE_LISTING.md`.
 - [ ] Contact email confirmed.
 - [ ] Privacy Policy published at a public URL.
 
@@ -36,7 +36,7 @@ This checklist tracks the non-code release work for CF-028. It complements `docs
 - [ ] Data Safety form completed. Current truthful posture: most data is on-device only; session keys/device tokens live in platform-secure storage; no third-party advertising/data sharing; data deletion via unpair/sign-out/uninstall.
 - [ ] Content rating questionnaire completed.
 - [ ] Target audience and content declaration completed.
-- [ ] App access instructions documented if reviewers need a local Gateway pairing path.
+- [x] App access instructions documented if reviewers need a local Gateway pairing path.
 
 ## Validation before public release
 
