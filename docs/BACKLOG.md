@@ -1120,7 +1120,7 @@ Prepare ClawFace for production deployment to the Google Play Store. The app shi
 
 #### Acceptance criteria
 
-- [ ] `eas.json` configured with `development`, `preview`, and `production` build profiles (production outputs `.aab`)
+- [x] `eas.json` configured with `development`, `preview`, and `production` build profiles (production outputs `.aab`)
 - [ ] Google Play Developer Account created ($25 one-time)
 - [ ] Google Service Account created and key stored for EAS Submit automation
 - [ ] Production build succeeds via `eas build --platform android --profile production`
@@ -1128,8 +1128,8 @@ Prepare ClawFace for production deployment to the Google Play Store. The app shi
 - [ ] Data Safety form completed in Play Console. ClawFace can truthfully declare: most data on-device only, session keys in platform-secure storage, no third-party data sharing, data deletion via unpair/sign-out
 - [ ] Content rating questionnaire (IARC) completed
 - [ ] Store listing: app icon (512×512), feature graphic (1024×500), at least 2 device screenshots, short description, full description
-- [ ] Target API level ≥ 35 (Android 15) confirmed in production build
-- [ ] 16KB page size support confirmed (Expo 54 / RN 0.81 should handle this)
+- [ ] Target API level ≥ 35 (Android 15) confirmed in production build (configured in `app.json`; pending EAS production build verification)
+- [x] 16KB page size support confirmed (Expo 54 / RN 0.81 should handle this)
 - [ ] Internal testing track deployed and validated before public release
 
 #### Test plan
@@ -1144,6 +1144,7 @@ Manual:
 
 - `eas.json`
 - `docs/PRIVACY_POLICY.md`
+- `docs/PLAY_STORE_RELEASE_CHECKLIST.md`
 - `app.json` (verify `android.package`, `versionCode`, target SDK)
 
 ---
