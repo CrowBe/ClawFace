@@ -1145,6 +1145,7 @@ Manual:
 - `eas.json`
 - `docs/PRIVACY_POLICY.md`
 - `docs/PLAY_STORE_RELEASE_CHECKLIST.md`
+- `docs/PLAY_STORE_LISTING.md`
 - `app.json` (verify `android.package`, `versionCode`, target SDK)
 
 ---
