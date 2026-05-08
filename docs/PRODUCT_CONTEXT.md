@@ -12,6 +12,7 @@ Related documents:
 - `docs/BACKLOG.md` — executable work backlog; not a source of product truth
 - `docs/PROTOCOL.md` — wire protocol (the only stable contract between ClawFace and any paired agent runtime)
 - `docs/SCALING_AND_UNIT_ECONOMICS.md` — business model and scaling assumptions
+- `docs/THREAT_MODEL.md` — structured threat model: assets, adversaries, mitigations, accepted risks
 
 ---
 

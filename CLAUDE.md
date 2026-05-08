@@ -10,6 +10,7 @@ ClawFace is an Expo mobile **AI agent operations app**: a mobile command surface
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) is the canonical product architecture, trust-boundary, approval-safety, relay, and hosted-vs-local responsibility document.
 - [docs/PROTOCOL.md](docs/PROTOCOL.md) is the canonical wire-protocol spec between ClawFace and any agent runtime.
 - [docs/SCALING_AND_UNIT_ECONOMICS.md](docs/SCALING_AND_UNIT_ECONOMICS.md) covers market positioning, business model, cost drivers, quotas, abuse controls, and scaling scenarios.
+- [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md) is the structured threat model (assets, adversaries, mitigations, accepted risks). It is a view onto `docs/ARCHITECTURE.md` §5/§6 and must not redefine architectural decisions.
 - [docs/BACKLOG.md](docs/BACKLOG.md) is the executable architecture backlog. It should point to canonical docs, not redefine architecture.
 - Do not create overlapping architecture/business planning docs. Update the canonical doc for the concern instead.
 - ClawFace does not implement an agent runtime, model provider, tool harness, or MCP server in this repository (per `docs/PRODUCT_CONTEXT.md` non-goals 1 and 2). Production agent runtimes (OpenClaw, future plugins) own their own architecture and live in their own repositories. The only stable contract is `docs/PROTOCOL.md`.

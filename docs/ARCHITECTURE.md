@@ -16,6 +16,7 @@ Related documents:
 - `docs/BACKLOG.md` — executable work backlog; not a source of architectural truth
 - `docs/SCALING_AND_UNIT_ECONOMICS.md` — business model, cost drivers, quotas, and scaling considerations
 - `docs/PROTOCOL.md` — canonical wire-protocol spec
+- `docs/THREAT_MODEL.md` — structured view onto §5 trust boundary and §6 guardrails (assets, adversaries, mitigations, accepted risks)
 
 Source-of-truth rule:
 
