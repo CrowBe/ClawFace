@@ -1238,6 +1238,653 @@ Build a web billing portal for Pro/Team subscriptions and an entitlement API the
 
 ---
 
+## Epic J — Production Reliability
+
+> These issues turn the M1 round-trip into a connection users can rely on across real Android lifecycle events: backgrounded apps, network changes, Doze, gateway upgrades, and long-lived chats. They are preconditions for a public Play Store release because the product promise is "trusted mobile control surface", not "works the first 30 seconds after pairing".
+
+---
+
+### CF-032 — Transport reconnect, backoff, and lifecycle policy
+
+**Status:** TODO
+**Priority:** P1
+**Milestone:** Post-M1
+**Epic:** J — Production Reliability
+**Blocked by:** CF-026
+
+> `docs/ARCHITECTURE.md` §6 guardrail 8 and §7 hosted-mode requirements call for explicit reconnect/backoff and idle-timeout enforcement. `docs/SCALING_AND_UNIT_ECONOMICS.md` §3 lists "always-on WebSocket relay" and reconnect backoff as primary cost drivers. Today the Gateway transport opens a socket and consumes `tickIntervalMs`, but there is no formalised reconnect policy, no NetInfo wake, no explicit foreground/background lifecycle handling, and no Doze/battery-saver behavior.
+
+#### Description
+
+Make `services/transport/openclaw-gateway.ts` resilient to the lifecycle events a real Android app encounters: app backgrounded, screen off, network type change, captive portal, Wi-Fi → cellular failover, Doze, App Standby, and Gateway restarts. The transport must reconnect predictably without becoming a battery or quota drain, and the UI must accurately reflect connection state at all times.
+
+This is reliability-of-existing-features work, not a new feature. After this lands, the user should never need to kill and reopen the app to recover a connection.
+
+#### Acceptance criteria
+
+- [ ] Reconnect uses bounded exponential backoff (e.g. 1s → 2s → 4s → … capped at 60s) with jitter; ceiling and base are constants in one place
+- [ ] `@react-native-community/netinfo` (or equivalent) drives reconnect attempts: a transition from offline → online cancels the current backoff timer and triggers an immediate attempt
+- [ ] AppState changes (`active` ↔ `background`) are handled: when active, ensure connected; when background, allow socket idle but do not aggressively tear down on momentary background
+- [ ] Explicit "stale tick" detection using `hello-ok.policy.tickIntervalMs` (already stored per CF-027) — if no Gateway tick or frame received within 2× tick interval, close and reconnect
+- [ ] Unrecoverable auth failures (revoked device token, fingerprint mismatch) stop reconnect attempts and surface a clear "re-pair required" UI state instead of looping
+- [ ] Connection state in the store distinguishes `connecting` / `online` / `reconnecting` / `offline` / `auth-failed`; existing `online: boolean` UI is upgraded to render the new states truthfully
+- [ ] No reconnect storm: a burst of `connection_changed` events from the transport does not produce multiple in-flight sockets; there is exactly one active connection per agent
+- [ ] `docs/PROTOCOL.md` §2 reconnect behavior section is updated to match the implemented policy (constants, ceiling, tick-staleness rule)
+
+#### Test plan
+
+```bash
+npx tsc --noEmit
+```
+
+Manual (Android, primary target):
+1. Pair against a local Gateway, confirm `online`. Toggle airplane mode → state becomes `offline`, then `reconnecting`, then `online` after airplane mode off.
+2. Background the app for 5 minutes, foreground → connection resumes within one backoff cycle, no duplicate sockets in Gateway logs.
+3. Stop the Gateway process, wait 3× tick interval → app shows `reconnecting`. Restart Gateway → app reconnects.
+4. Revoke the device token from another client → app surfaces `auth-failed` and stops retrying.
+5. Wi-Fi → cellular failover (toggle Wi-Fi off with cellular available) → reconnects within one backoff cycle.
+
+#### Files
+
+- `services/transport/openclaw-gateway.ts`
+- `services/transport/types.ts` (richer connection-state enum)
+- `store/index.ts` (connection state surface)
+- `app/_layout.tsx` (AppState wiring if not already centralised)
+- `docs/PROTOCOL.md`
+- `package.json` (NetInfo dependency)
+
+---
+
+### CF-033 — Bounded transcript retention and message pruning
+
+**Status:** TODO
+**Priority:** P2
+**Milestone:** Post-M1
+**Epic:** J — Production Reliability
+**Blocked by:** CF-009
+
+> `docs/SCALING_AND_UNIT_ECONOMICS.md` §3 calls out "large transcript or tool-output syncing" as a primary storage cost trap. The same trap applies on-device: AsyncStorage on Android has practical size limits, and `services/persistence.ts` currently dehydrates the entire `Message[]` per thread without pruning. A long-lived agent producing tool output will eventually break hydration.
+
+#### Description
+
+Add an explicit retention policy for persisted thread messages with both a per-thread cap (e.g. last 500 messages) and a global byte budget (e.g. 5 MB serialised state). Pruning runs at dehydration time and at message ingest. Pruned messages are gone — ClawFace does not own transcript history, the agent runtime does. If the user wants older messages, they fetch them from the agent runtime (`fetchSessionHistory` already exists per CF-031).
+
+#### Acceptance criteria
+
+- [ ] `services/persistence.ts` enforces a per-thread message cap (constant; sane default ~500) before writing
+- [ ] Persistence enforces a global serialised-size budget; if the budget is exceeded, prune oldest messages from the most-message-heavy threads first
+- [ ] Pruning is non-destructive in memory during a session; it only affects what is written to disk and what is re-hydrated on cold start
+- [ ] On hydrate, threads with no local messages but a known Gateway session can still pull history via `fetchSessionHistory` (existing CF-031 path)
+- [ ] Persistence migration V4→V5 (or the next version) backfills no data but bumps the schema and applies pruning on first write
+- [ ] Constants and policy are documented inline in `services/persistence.ts`
+- [ ] `docs/ARCHITECTURE.md` §3 mentions the local-retention policy in one sentence and points to `services/persistence.ts` for the constants
+
+#### Test plan
+
+```bash
+npx tsc --noEmit
+```
+
+Manual:
+1. Seed a thread with > 500 messages (dev console or fixture), reload → only the most recent N persist.
+2. Seed messages until serialised size exceeds the budget → oldest pruned, app does not crash, recent messages intact.
+3. Open a thread that was pruned to empty → existing CF-031 history fetch repopulates it from the Gateway.
+
+#### Files
+
+- `services/persistence.ts`
+- `store/index.ts` (only if pruning needs a hook on send/receive)
+- `data/seed.ts` (constants location optional)
+- `docs/ARCHITECTURE.md`
+
+---
+
+### CF-034 — Gateway protocol version compatibility and upgrade UX
+
+**Status:** TODO
+**Priority:** P2
+**Milestone:** Post-M1
+**Epic:** J — Production Reliability
+**Blocked by:** CF-026
+
+> ClawFace pins OpenClaw Gateway Protocol v3. When OpenClaw raises the Gateway floor (or when ClawFace upgrades faster than a paired Gateway), the connect handshake will fail and the user will see an opaque error. Post-launch this becomes the most common support ticket because we ship the app and OpenClaw on independent release cycles.
+
+#### Description
+
+Treat protocol version mismatch as a first-class state, not a generic transport error. The transport must distinguish "Gateway too new" from "Gateway too old" from "auth failed" from "network down" and the UI must surface a clear next action ("update ClawFace" / "update OpenClaw / Gateway") without any sensitive payload context.
+
+#### Acceptance criteria
+
+- [ ] `services/transport/openclaw-gateway.ts` records the negotiated protocol version and any `protocol-mismatch` / `unsupported-version` error from the Gateway hello response
+- [ ] A version mismatch produces a stable transport notice with a machine-readable kind (e.g. `protocol_too_new`, `protocol_too_old`) plus the local pinned version and the Gateway's advertised version
+- [ ] The pair screen and the agent row render an actionable banner for version mismatches: "OpenClaw Gateway is newer than this app. Update ClawFace." (or the inverse)
+- [ ] Reconnect logic (CF-032) does NOT retry on a version mismatch — it stops and surfaces the static error, identical to `auth-failed`
+- [ ] `docs/PROTOCOL.md` §2 documents the supported Gateway protocol range, the mismatch error shape, and the expected ClawFace UX
+- [ ] No protocol details (Gateway internal version metadata, feature lists) are logged or surfaced beyond what is needed to render the upgrade prompt
+
+#### Test plan
+
+```bash
+npx tsc --noEmit
+```
+
+Manual / fixture:
+1. Modify `scripts/openclaw-gateway-discover.js` (or a dev fixture Gateway) to advertise a future protocol version → app shows `protocol_too_new` banner; reconnect does not loop.
+2. Force the client to pin a version below the Gateway → app shows `protocol_too_old`; reconnect does not loop.
+3. Re-pair after updating ClawFace to a compatible version → connects normally.
+
+#### Files
+
+- `services/transport/openclaw-gateway.ts`
+- `services/transport/normalize.ts`
+- `app/pair.tsx`
+- `app/index.tsx` (agent row banner)
+- `docs/PROTOCOL.md`
+
+---
+
+## Epic K — Observability and Quality
+
+> Production support and security-sensitive behaviour both need ground truth. Today there is no crash reporter, no in-app diagnostics surface, and no automated test harness. These issues create the floor that makes future changes safe to merge.
+
+---
+
+### CF-035 — Crash and error telemetry with redaction policy
+
+**Status:** TODO
+**Priority:** P1
+**Milestone:** Post-M1
+**Epic:** K — Observability and Quality
+**Blocked by:** CF-028
+
+> `docs/ARCHITECTURE.md` §5 trust boundary forbids the hosted control plane from storing prompts, code, command output, or secrets. That guardrail applies to telemetry too: a crash report that ships a stack trace plus a serialised store snapshot would smuggle protected content out of the trust boundary. This issue establishes a redaction policy first and a telemetry SDK second.
+
+#### Description
+
+Add EAS-compatible crash and error telemetry (Sentry or equivalent) with an explicit, code-enforced redaction allowlist. The default behaviour is "redact everything except a known-safe allowlist": stack traces, RN/Expo runtime errors, transport state machine transitions (without payloads), notification delivery failures. Anything carrying user content — message text, tool args/output, prompts, agent context strings, deviceTokens, sessionKeys, fingerprints — is filtered before send.
+
+The redaction policy is the deliverable. The SDK choice is secondary.
+
+#### Acceptance criteria
+
+- [ ] `docs/TELEMETRY_REDACTION.md` (new) documents what is captured, what is redacted, and where the redaction lives. It is referenced from `docs/ARCHITECTURE.md` §5.
+- [ ] A telemetry adapter module (e.g. `services/telemetry.ts`) wraps the SDK with `captureError(err, { tags, contexts })` and a `beforeSend` hook that strips disallowed keys
+- [ ] A redaction allowlist constant lists every field the app may attach to a telemetry event; anything else is dropped
+- [ ] The transport, persistence, normalizer, and store throw/catch sites route through the adapter — no raw `Sentry.captureException` calls
+- [ ] Telemetry is opt-out: a setting on `/me` lets the user disable it. Default is on. The choice is persisted across launches.
+- [ ] No telemetry is initialised before the user has dismissed a one-time consent line in onboarding (or during pairing for existing installs). Required for Play Console Data Safety honesty.
+- [ ] `docs/PRIVACY_POLICY.md` is updated to disclose telemetry collection and the redaction model
+- [ ] A unit test (or normalizer-style fixture test) verifies the `beforeSend` hook strips a known-bad payload
+
+#### Test plan
+
+```bash
+npx tsc --noEmit
+```
+
+Manual:
+1. Trigger a forced error (dev-only button) → telemetry event arrives in the SDK dashboard with stack trace but no message text, no agent name, no host.
+2. Disable telemetry on `/me`, trigger again → no event sent.
+3. Cold-start with a fresh install → no telemetry until consent line is dismissed.
+
+#### Files
+
+- `services/telemetry.ts` (new)
+- `services/transport/openclaw-gateway.ts`
+- `services/persistence.ts`
+- `store/index.ts`
+- `app/_layout.tsx`
+- `app/me.tsx`
+- `docs/TELEMETRY_REDACTION.md` (new)
+- `docs/PRIVACY_POLICY.md`
+- `docs/ARCHITECTURE.md`
+- `package.json`
+
+---
+
+### CF-036 — In-app transport diagnostics screen
+
+**Status:** TODO
+**Priority:** P2
+**Milestone:** Post-M1
+**Epic:** K — Observability and Quality
+**Blocked by:** CF-032
+
+> `docs/ARCHITECTURE.md` §7 lists "observability for relay connection state" and "incident/debug tooling that does not expose sensitive content by default". A read-only diagnostics screen lets users self-diagnose pairing/transport failures without us asking for raw logs. It is also the surface that proves the redaction policy from CF-035 is honest.
+
+#### Description
+
+Add a diagnostics screen reachable from `/me` (and from a long-press on an agent row) that shows non-sensitive transport state for a paired agent: current connection state, last connect/disconnect timestamp, last 20 frame-shape events (kind only — no payloads), pinned protocol version, advertised Gateway protocol version, last error kind, deviceToken-present flag (boolean only), and the maintainer-readable reconnect schedule.
+
+This is the surface a support flow can ask the user to screenshot. It must contain zero message text, zero tool args, zero prompts, zero secrets, zero agent context strings.
+
+#### Acceptance criteria
+
+- [ ] New route `/diagnostics/[agentId]` with a back button
+- [ ] Screen lists: agent ID (display name and `agent.id`), `mode`, `transport`, current connection state (CF-032), last 20 frame-kind events with timestamp, last 5 transport notices/errors with `kind` only, protocol version (pinned and advertised), `deviceTokenPresent: boolean`, `tickIntervalMs`, `maxPayload`
+- [ ] Screen has a "Copy diagnostics" action that copies the same redacted view to clipboard as JSON
+- [ ] Frame log is bounded (ring buffer, ~50 entries) and lives in memory only — not persisted
+- [ ] Screen explicitly hides any field that would carry user content; a short footer reads "Message and tool content is never shown here."
+- [ ] Linked from `/me` under a "Diagnostics" row and accessible per-agent
+- [ ] An audit comment in `services/transport/openclaw-gateway.ts` lists the field allowlist
+
+#### Test plan
+
+```bash
+npx tsc --noEmit
+```
+
+Manual:
+1. Pair, send messages → diagnostics shows frame kinds (`session.message`, `chat`, `agent`) but no message content.
+2. Force a disconnect → last error kind appears, frame log has the disconnect entry.
+3. Copy diagnostics → clipboard JSON contains nothing matching message content or token material.
+
+#### Files
+
+- `app/diagnostics/[agentId].tsx` (new)
+- `services/transport/openclaw-gateway.ts` (expose ring buffer)
+- `app/me.tsx` (link)
+- `app/index.tsx` (long-press affordance)
+
+---
+
+### CF-037 — Test harness and CI pipeline
+
+**Status:** TODO
+**Priority:** P1
+**Milestone:** Post-M1
+**Epic:** K — Observability and Quality
+
+> CF-017, CF-018, CF-019, CF-020 all hedge with "if a test harness exists; otherwise document the manual validation path." It does not exist. Security-sensitive code paths — replay protection (CF-004), approval expiry (CF-006), session revocation (CF-005), persistence migrations (CF-009/CF-033), the Gateway normalizer (CF-018), reconnect policy (CF-032), telemetry redaction (CF-035) — are currently unverifiable except by hand. This blocks confidence in any release after CF-028.
+
+#### Description
+
+Add a Jest + `@testing-library/react-native`-style test harness with a small, focused first suite covering the highest-leverage behaviour: store reducers, persistence migrations end-to-end, the Gateway event normalizer, and the redaction allowlist from CF-035. Add a GitHub Actions (or equivalent) workflow that runs `tsc --noEmit` and the test suite on every PR.
+
+This is not "100% coverage". It is "the security-sensitive code paths have a regression net."
+
+#### Acceptance criteria
+
+- [ ] Jest configured for an Expo/RN TypeScript project; `npm test` runs the suite
+- [ ] Initial test files cover: `services/transport/normalize.ts` (each event family + malformed payloads), `services/persistence.ts` (each forward migration with a fixture), `store/index.ts` reducers around `resolveApproval`, `sendMessage`, `removeAgent`, `signOut`
+- [ ] A redaction allowlist test (CF-035) is included
+- [ ] CI workflow (`.github/workflows/ci.yml`) runs `npm install`, `npx tsc --noEmit`, `npm test` on push and PR
+- [ ] CI fails the build on type or test failure
+- [ ] `README.md` and `CLAUDE.md` are updated: `npm test` is the new lightweight validation gate alongside `npx tsc --noEmit`
+- [ ] No flaky tests in the initial suite — anything timing-sensitive uses fake timers
+
+#### Test plan
+
+```bash
+npm install
+npx tsc --noEmit
+npm test
+```
+
+Manual: open a PR with a deliberately broken normalizer change → CI red. Revert → CI green.
+
+#### Files
+
+- `package.json` (jest, testing-library, ts-jest config)
+- `jest.config.js` (new)
+- `__tests__/` (new) with first suites
+- `.github/workflows/ci.yml` (new)
+- `README.md`
+- `CLAUDE.md`
+
+---
+
+## Epic L — Notification Lifecycle
+
+> The product north star in `docs/PRODUCT_CONTEXT.md` is "calm command, no alert fatigue". Today notifications fire local-only and unfiltered. These issues build the throttle/quiet-hour layer the north star requires, plus the server-driven push pipeline that makes the Pro tier real.
+
+---
+
+### CF-038 — Per-agent notification throttles and quiet hours
+
+**Status:** TODO
+**Priority:** P1
+**Milestone:** Post-M1
+**Epic:** L — Notification Lifecycle
+**Blocked by:** CF-020
+
+> `docs/ARCHITECTURE.md` §6 Layer 6 requires "rate-limit noisy agents" and `docs/SCALING_AND_UNIT_ECONOMICS.md` §5 lists notification throttling as a precondition for hosted launch. The store has `agent.notifs` flags but no rate, no quiet-hour window, and no per-agent severity filter — exactly the alert-fatigue surface the product promise rules out.
+
+#### Description
+
+Extend the per-agent notification settings on `/config/[agentId]` with: a quiet-hours window (start/end time, optional timezone-aware), a minimum severity filter (e.g. only Approvals, or Approvals + Updates), and a per-agent rate cap (e.g. max N notifications per 10 minutes; subsequent ones coalesce into a single "X new updates from {agent}" notification). The rate cap is enforced inside `services/notifications.ts`; the quiet-hours window is enforced before scheduling.
+
+#### Acceptance criteria
+
+- [ ] `data/seed.ts` `Agent.notifs` extended with `{ quietHours?: { start: 'HH:mm'; end: 'HH:mm' }, severity: 'all' | 'handoffs' | 'approvals-only', rateLimitPerTenMin: number }`
+- [ ] Persistence migration backfills defaults
+- [ ] `app/config/[agentId].tsx` exposes the new controls with sensible copy
+- [ ] `services/notifications.ts` consults the agent's settings before scheduling; if rate cap is exceeded, coalesce into a single summary notification rather than dropping silently
+- [ ] Pending count badges (`agentsWithPending`, `pendingCount`) are unaffected by throttling — the alert-fatigue control is on _delivery_, not on truth state
+- [ ] `docs/UBIQUITOUS_LANGUAGE.md` is updated only if a new term is needed; otherwise unchanged
+
+#### Test plan
+
+```bash
+npx tsc --noEmit
+```
+
+Manual:
+1. Set a quiet-hours window covering "now" → incoming approvals do not produce a tray notification but the badge still increments.
+2. Set rate cap to 2/10min → fire 5 approvals quickly. First 2 produce notifications, the next 3 coalesce into one summary.
+3. Set severity to `approvals-only` → an `Update` does not notify; an `Approval` does.
+
+#### Files
+
+- `data/seed.ts`
+- `services/persistence.ts`
+- `services/notifications.ts`
+- `app/config/[agentId].tsx`
+- `store/index.ts`
+
+---
+
+### CF-039 — Server-driven push delivery (FCM / Expo Push)
+
+**Status:** TODO
+**Priority:** P2
+**Milestone:** Post-M1
+**Epic:** L — Notification Lifecycle
+**Blocked by:** CF-035, CF-029
+
+> `services/notifications.ts` does local notifications only. There is no Expo push token registration, no FCM credential setup, no server-side delivery path. Production push from a remote agent (the Pro-tier value prop in `docs/SCALING_AND_UNIT_ECONOMICS.md` §2) is currently impossible. Without server push, "agent paged me about an approval while I was away from my laptop" — the core remote-control promise — cannot be honoured.
+
+#### Description
+
+Wire Expo Push (or direct FCM) end-to-end: register a push token on first launch, persist it via the relay/control plane, accept push payloads carrying only routing metadata (agentId, threadId, event kind — never message text), and on tap route to the existing CF-007 handler. This issue is scoped to the mobile-app side; the relay-side dispatch is part of the broader hosted-relay work tracked under CF-042.
+
+Per `docs/ARCHITECTURE.md` §6 Layer 6 and §5 trust boundary, push payloads must contain only enough information to route the user back into the app. Message content stays out.
+
+#### Acceptance criteria
+
+- [ ] Push token registration via `expo-notifications` `getDevicePushTokenAsync` (or `getExpoPushTokenAsync`); token persisted in store and (eventually) sent to the relay during pairing
+- [ ] FCM Android credentials configured via EAS / `app.json` `notification` block; documented in `docs/PLAY_STORE_RELEASE_CHECKLIST.md`
+- [ ] Push payload contract documented in `docs/PROTOCOL.md`: `{ agentId, threadId, kind: 'approval' | 'update' | 'handoff', reqId? }` — no `body` content beyond a static title and a generic "Open ClawFace" body
+- [ ] Tap handler reuses the CF-007 `addNotificationResponseReceivedListener` path
+- [ ] Throttle/quiet-hours from CF-038 apply on receive, before the local-notification scheduler is invoked, since some pushes will arrive while the app is foregrounded
+- [ ] Telemetry redaction allowlist (CF-035) covers push delivery errors without leaking payload content
+- [ ] Direct-mode (no relay) agents do NOT register push — local-only continues to use the existing local-notification path. Rationale documented inline.
+
+#### Test plan
+
+```bash
+npx tsc --noEmit
+```
+
+Manual (Android, requires FCM-configured EAS dev/preview build):
+1. Cold-start a relay-mode agent → push token captured.
+2. Send a synthetic push from the relay (or `curl` Expo Push API) with a routing-only payload → tray notification appears with no message text.
+3. Tap → opens the correct thread (CF-007 path).
+4. With quiet hours active, send another push → no tray notification but state updates.
+
+#### Files
+
+- `services/notifications.ts`
+- `services/transport/openclaw-gateway.ts` (or relay transport once CF-042 lands)
+- `store/index.ts`
+- `app/_layout.tsx`
+- `app.json`
+- `docs/PROTOCOL.md`
+- `docs/PLAY_STORE_RELEASE_CHECKLIST.md`
+- `package.json`
+
+---
+
+## Epic M — Compliance and Accessibility
+
+> Play Console review and a credible security posture for technical buyers both require explicit user-data-deletion paths and a baseline accessibility level. Neither is gated by infrastructure; both are gated by us doing the work.
+
+---
+
+### CF-040 — Account deletion and local data export
+
+**Status:** TODO
+**Priority:** P1
+**Milestone:** Post-M1
+**Epic:** M — Compliance and Accessibility
+**Blocked by:** CF-028
+
+> Google Play Data Safety requires an explicit user-initiated data-deletion path. CF-028 hand-waves "data deletion via unpair/sign-out", which is not a complete answer once we add a relay (CF-042) and an account model (CF-043). This issue formalises both deletion and export so the Play Store declaration is honest today and stays honest as hosted features land.
+
+#### Description
+
+Add a "Delete all data" action on `/me` that wipes AsyncStorage, SecureStore, the local notification queue, the diagnostics ring buffer (CF-036), and the telemetry SDK's local cache. When a relay account exists (post-CF-042/CF-043), the same action sends a server deletion request and blocks until acknowledgement, with a fallback that records the intent and retries on next connection.
+
+Add a "Export my data" action that produces a single JSON file containing all locally-stored non-secret state (agents minus session keys, threads, messages, settings) and offers it via the platform share sheet.
+
+#### Acceptance criteria
+
+- [ ] `/me` exposes "Export my data" and "Delete all data" actions, each with a confirmation step
+- [ ] Export produces a versioned JSON document; secrets (session keys, deviceTokens, Ed25519 seeds, push tokens) are excluded
+- [ ] Delete wipes AsyncStorage (`services/persistence.ts`), every key in SecureStore (`services/secureStore.ts`), the diagnostics buffer, and clears any in-memory store state
+- [ ] Delete navigates the user back to onboarding state with no paired agents and no toast leaking deleted data
+- [ ] When a relay account exists, delete attempts a server-side deletion request and shows a clear status (success / queued for retry)
+- [ ] `docs/PRIVACY_POLICY.md` describes both flows and the retention implications
+- [ ] `docs/PLAY_STORE_RELEASE_CHECKLIST.md` Data Safety row references the in-app deletion path
+
+#### Test plan
+
+```bash
+npx tsc --noEmit
+```
+
+Manual:
+1. Pair, exchange messages, run Export → JSON file shared, contains messages and settings, contains zero matches for `sessionKey` / `deviceToken` / `seed`.
+2. Run Delete → confirm prompt, after confirm app returns to empty state, AsyncStorage and SecureStore are empty (verify via dev console).
+3. Re-launch → app boots into pristine onboarding.
+
+#### Files
+
+- `app/me.tsx`
+- `services/persistence.ts`
+- `services/secureStore.ts`
+- `store/index.ts`
+- `docs/PRIVACY_POLICY.md`
+- `docs/PLAY_STORE_RELEASE_CHECKLIST.md`
+
+---
+
+### CF-041 — Accessibility baseline pass
+
+**Status:** TODO
+**Priority:** P2
+**Milestone:** Post-M1
+**Epic:** M — Compliance and Accessibility
+
+> SVG icons in `components/Icons.tsx` and screen-level icon buttons across `app/` have no `accessibilityLabel` or `accessibilityRole`. Touch targets and color contrast are not audited. None of this blocks Play Store review on its own, but it is the cheapest credibility lever before a public listing — and it is genuinely required for the "lower the barrier" product promise in `docs/PRODUCT_CONTEXT.md`.
+
+#### Description
+
+Walk every screen and every interactive component, add `accessibilityLabel` / `accessibilityRole` / `accessibilityState` where missing, audit hit slop on icon-only buttons (minimum 44×44 effective), and verify that the warm-paper palette in `constants/colors.ts` meets WCAG AA contrast on text. Where contrast falls short, adjust the palette token rather than introducing per-screen overrides. Verify Dynamic Type / font scaling does not break key layouts.
+
+#### Acceptance criteria
+
+- [ ] Every icon-only `Pressable` / `TouchableOpacity` has an `accessibilityLabel` and `accessibilityRole="button"`
+- [ ] Tab bar items have `accessibilityRole="tab"` and a state matching the active tab
+- [ ] Approval card actions have explicit labels including the consequence ("Approve write to {path}")
+- [ ] All text colours used on `C.bg` and `C.card` backgrounds meet WCAG AA contrast for body and large-text thresholds; failing tokens are adjusted in `constants/colors.ts`
+- [ ] Smoke pass with TalkBack: agents list, threads list, chat, alerts, pair flow are navigable end-to-end
+- [ ] Smoke pass at largest system font scale: no truncation in agent rows, approval cards, or the tab bar
+- [ ] Hit slop on icon-only controls audited (44×44 effective)
+- [ ] No new dependencies introduced
+
+#### Test plan
+
+```bash
+npx tsc --noEmit
+```
+
+Manual (Android):
+1. TalkBack walk-through of Agents → Threads → Chat → Alerts → Pair → Me; every interactive element announces a meaningful label and role.
+2. Set system font to maximum; verify no clipped labels in the agent row, the approval card, the tab bar, or the chat input.
+3. Run a contrast checker against the rendered palette; record results in this issue's Description before closing.
+
+#### Files
+
+- `components/Icons.tsx`
+- `components/ApprovalCard.tsx`
+- `components/Toggle.tsx`
+- `app/index.tsx`
+- `app/threads/[agentId].tsx`
+- `app/chat/[agentId]/[threadId].tsx`
+- `app/alerts.tsx`
+- `app/pair.tsx`
+- `app/me.tsx`
+- `app/config/[agentId].tsx`
+- `constants/colors.ts` (palette adjustments only if contrast requires it)
+
+---
+
+## Epic N — Hosted Relay Foundation
+
+> CF-029 covers encryption *for* the relay; CF-030 covers billing entitlements; both depend on a relay transport and an account/device identity model that don't yet exist. This epic tracks those missing middle pieces and the threat model that keeps them honest.
+
+---
+
+### CF-042 — Hosted relay transport implementation
+
+**Status:** TODO
+**Priority:** P1
+**Milestone:** Post-M1
+**Epic:** N — Hosted Relay Foundation
+**Blocked by:** CF-029, CF-043
+
+> `services/transport/index.ts` currently routes `agent.mode === 'relay'` through a console warning and falls back to the direct WebSocket transport. There is no actual relay client. The relay's responsibilities are documented in `docs/ARCHITECTURE.md` §2B and §4 Layer 5; the encryption boundary is in §5 (covered by CF-029); the cost model is in `docs/SCALING_AND_UNIT_ECONOMICS.md` §3. This issue implements the client.
+
+#### Description
+
+Implement `services/transport/relay.ts`, a transport that connects to the hosted control plane, authenticates with the account/device credentials from CF-043, sends and receives encrypted envelope frames per CF-029, and surfaces the same `AgentTransport` interface as `OpenClawGatewayTransport` so the rest of the app is unchanged.
+
+Per `docs/ARCHITECTURE.md` §6 guardrails 1, 2, and 3, the relay transport must not become accidental hosted compute, must not run agents, and must not require plaintext access to message content. Per the preferred deployment pattern in §2B, the client should treat the relay endpoint as potentially node-per-account rather than a shared multi-tenant URL.
+
+#### Acceptance criteria
+
+- [ ] `services/transport/relay.ts` implements `AgentTransport` with `connect`, `disconnect`, `sendMessage`, `resolveApproval`, and the multi-thread methods from CF-031
+- [ ] Authentication uses the account/device credentials from CF-043; pairing flow accepts a relay-mode payload alongside the existing direct-mode payload
+- [ ] All payloads round-trip through the CF-029 envelope encryption layer; the relay only sees routing metadata
+- [ ] `services/transport/index.ts` routes `agent.mode === 'relay'` to `relay.ts` instead of the warning-and-fallback
+- [ ] Reconnect/backoff (CF-032) and protocol version compatibility (CF-034) policies are reused — no new copy of those state machines
+- [ ] Telemetry (CF-035) covers relay-specific error kinds without crossing the redaction allowlist
+- [ ] Push token registration (CF-039) ties to the relay account and binds to the relay session
+- [ ] `docs/PROTOCOL.md` adds a "Relay frames" section documenting the envelope frame layout, routing fields, and error kinds
+- [ ] `docs/ARCHITECTURE.md` §3 is updated: relay transport is implemented, not "warning fallback"
+
+#### Test plan
+
+```bash
+npx tsc --noEmit
+npm test
+```
+
+Manual (against a staging relay):
+1. Pair an agent in relay mode → connects via the relay, never via direct WebSocket.
+2. Send a message → relay logs (server side) show only routing metadata, no plaintext payload.
+3. Toggle network → reconnect/backoff behaves identically to direct mode (CF-032).
+4. Revoke device on the relay → app surfaces `auth-failed` and stops retrying.
+
+#### Files
+
+- `services/transport/relay.ts` (new)
+- `services/transport/index.ts`
+- `services/transport/types.ts`
+- `app/pair.tsx`
+- `docs/PROTOCOL.md`
+- `docs/ARCHITECTURE.md`
+
+---
+
+### CF-043 — Account and device identity model for relay
+
+**Status:** TODO
+**Priority:** P1
+**Milestone:** Post-M1
+**Epic:** N — Hosted Relay Foundation
+**Blocked by:** CF-030
+
+> `docs/ARCHITECTURE.md` §7 lists "account/device/agent identity model" as a hosted-mode prerequisite. Today there is no such model: agents are paired peer-to-peer and have no relationship to a billing account. CF-030 builds entitlement on top of an account; this issue establishes the account.
+
+#### Description
+
+Define and implement the account/device/agent identity model that sits underneath relay mode and entitlement. An Agent Operator has one account. An account has one or more device installs (each ClawFace install on a phone). An account binds zero or more paired agents (whether direct or relay mode). A device proves identity to the account using the existing Ed25519 device key plus a server-issued account credential. Sign-in on a new phone re-binds a device to the existing account.
+
+This is the smallest model that supports CF-030 (entitlements), CF-039 (push delivery to all an account's devices), CF-040 (server-side data deletion), and CF-042 (relay authentication).
+
+#### Acceptance criteria
+
+- [ ] `docs/ARCHITECTURE.md` §4 grows a Layer 7 (or extends Layer 5) describing the account/device/agent identity model
+- [ ] Account creation/sign-in flow added to the app: email-based sign-in via the web billing portal (CF-030) with a device-binding token returned to the app on first install
+- [ ] `services/secureStore.ts` stores the account credential alongside per-agent secrets; the account credential is wiped by CF-040 delete
+- [ ] Existing direct-mode pairing continues to work without an account; account is only required for relay mode
+- [ ] Device revocation: an account holder can revoke a device from the web portal; the next connect attempt by the revoked device fails with `auth-failed` (CF-032)
+- [ ] `docs/SCALING_AND_UNIT_ECONOMICS.md` §3.1 and §4 reference the implemented account model rather than the abstract "entitlement state"
+- [ ] No PII beyond email is collected; documented in `docs/PRIVACY_POLICY.md`
+
+#### Test plan
+
+```bash
+npx tsc --noEmit
+npm test
+```
+
+Manual:
+1. Fresh install → direct-mode pairing works with no account.
+2. Sign in via web portal → device binds; relay-mode pairing now offered.
+3. Revoke device from web portal → app shows `auth-failed`, requires re-bind.
+4. Sign out → account credential removed but direct-mode agents remain paired.
+
+#### Files
+
+- `services/secureStore.ts`
+- `services/account.ts` (new)
+- `app/me.tsx`
+- `app/pair.tsx`
+- `docs/ARCHITECTURE.md`
+- `docs/SCALING_AND_UNIT_ECONOMICS.md`
+- `docs/PRIVACY_POLICY.md`
+
+---
+
+### CF-044 — Threat model document
+
+**Status:** TODO
+**Priority:** P2
+**Milestone:** Post-M1
+**Epic:** N — Hosted Relay Foundation
+
+> `docs/ARCHITECTURE.md` §5 and §6 are the de facto threat model but aren't structured as one. A concise `docs/THREAT_MODEL.md` (assets, adversaries, mitigations, accepted risks) is cheap to produce and signals the security posture to Play Store reviewers, security-conscious technical buyers, and any future audit. The first version of this document is written under this issue; subsequent updates ride on the issues that change the underlying mitigations.
+
+#### Description
+
+Author `docs/THREAT_MODEL.md` covering the assets ClawFace handles (session keys, device tokens, message content, push tokens, account credentials, approval decisions), the in-scope adversaries (passive network observer, rogue pairing server, compromised relay node, lost/stolen phone, malicious paired agent, OS-level attacker), the mitigations in place today (linking to existing CF issues), and explicitly flagged accepted risks (e.g. ClawFace does not defend against a malicious paired agent runtime; the user's trust in the runtime is the trust boundary).
+
+The deliverable is documentation only. It must reference, not duplicate, the canonical decisions in `docs/ARCHITECTURE.md` §5/§6.
+
+#### Acceptance criteria
+
+- [ ] `docs/THREAT_MODEL.md` exists and follows the structure: Assets, Adversaries, Mitigations, Accepted Risks, Out of Scope, Re-evaluation Triggers
+- [ ] Each Mitigation row links to the CF-### that owns it (or to `docs/ARCHITECTURE.md` §5/§6 when the mitigation is architectural rather than executable)
+- [ ] `docs/ARCHITECTURE.md` and `docs/PRODUCT_CONTEXT.md` add a one-line reference to `docs/THREAT_MODEL.md` in their Related Documents lists
+- [ ] `CLAUDE.md` adds `docs/THREAT_MODEL.md` to the documentation-source-of-truth list
+- [ ] No duplication of architectural decisions; the threat model is a view onto them, not a redefinition
+
+#### Test plan
+
+Documentation only. Human review: every guardrail in `docs/ARCHITECTURE.md` §6 has a corresponding mitigation row, and every "by design" item in §5 has a matching accepted-risk row.
+
+#### Files
+
+- `docs/THREAT_MODEL.md` (new)
+- `docs/ARCHITECTURE.md`
+- `docs/PRODUCT_CONTEXT.md`
+- `CLAUDE.md`
+
+---
+
 ## Issue index
 
 > Note: CF-030 (web billing portal) lives outside the ClawFace mobile repo per non-goals 1 and 2. It is tracked here for backlog completeness but implementation belongs to a separate service repository.
@@ -1274,3 +1921,17 @@ Build a web billing portal for Pro/Team subscriptions and an entitlement API the
 | CF-028 | Google Play Store deployment preparation | Post-M1 | P1 | TODO | CF-016 |
 | CF-029 | E2E envelope encryption for relay-mode payloads | Post-M1 | P1 | TODO | CF-026 |
 | CF-030 | Web billing portal and entitlement API | Post-M1 | P2 | TODO | CF-028 |
+| CF-031 | Multi-session/thread support per paired agent | M2 | P1 | DONE | CF-026 |
+| CF-032 | Transport reconnect, backoff, and lifecycle policy | Post-M1 | P1 | TODO | CF-026 |
+| CF-033 | Bounded transcript retention and message pruning | Post-M1 | P2 | TODO | CF-009 |
+| CF-034 | Gateway protocol version compatibility and upgrade UX | Post-M1 | P2 | TODO | CF-026 |
+| CF-035 | Crash and error telemetry with redaction policy | Post-M1 | P1 | TODO | CF-028 |
+| CF-036 | In-app transport diagnostics screen | Post-M1 | P2 | TODO | CF-032 |
+| CF-037 | Test harness and CI pipeline | Post-M1 | P1 | TODO | - |
+| CF-038 | Per-agent notification throttles and quiet hours | Post-M1 | P1 | TODO | CF-020 |
+| CF-039 | Server-driven push delivery (FCM / Expo Push) | Post-M1 | P2 | TODO | CF-035, CF-029 |
+| CF-040 | Account deletion and local data export | Post-M1 | P1 | TODO | CF-028 |
+| CF-041 | Accessibility baseline pass | Post-M1 | P2 | TODO | - |
+| CF-042 | Hosted relay transport implementation | Post-M1 | P1 | TODO | CF-029, CF-043 |
+| CF-043 | Account and device identity model for relay | Post-M1 | P1 | TODO | CF-030 |
+| CF-044 | Threat model document | Post-M1 | P2 | TODO | - |
