@@ -129,14 +129,19 @@ export const useStore = create<State>((set, get) => ({
   toast: null,
   settings: { biometric: true, pushNotifs: true, theme: 'light' },
 
-  agentsWithPending: () => {
-    const s = get();
-    const out = new Set<string>();
-    s.threads.forEach(t => {
-      if (isPendingHandoff(t)) out.add(t.agentId);
-    });
-    return out;
-  },
+  agentsWithPending: (() => {
+    let lastThreads: Thread[] | null = null;
+    let lastResult = new Set<string>();
+    return () => {
+      const threads = get().threads;
+      if (threads === lastThreads) return lastResult;
+      lastThreads = threads;
+      const out = new Set<string>();
+      threads.forEach(t => { if (isPendingHandoff(t)) out.add(t.agentId); });
+      lastResult = out;
+      return out;
+    };
+  })(),
 
   pendingCount: () => {
     const s = get();
