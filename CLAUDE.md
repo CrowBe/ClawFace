@@ -76,7 +76,7 @@ Safe-area handling: screens call `useSafeAreaInsets()` and apply padding manuall
 
 - **UI polish and real agent transport are both in scope.** Design parity with the original mockups is close but not final; hardening the real pairing/transport path is the next major thrust.
 - The app now has AsyncStorage persistence, SecureStore session-key and Gateway device token handling, and the OpenClaw Gateway transport. All connectivity goes through the Gateway.
-- The OpenClaw Gateway transport (`services/transport/openclaw-gateway.ts`) implements Gateway Protocol v3 connect, `sessions.send`, `sessions.messages.subscribe`, and `sessions.create`. Gateway approval resolution, mobile device signing, and device token revocation via RPC are not yet wired.
+- The OpenClaw Gateway transport (`services/transport/openclaw-gateway.ts`) implements Gateway Protocol v3 connect, `sessions.send`, `sessions.messages.subscribe`, `sessions.create`, mobile Ed25519 device signing, device-token revocation via `device.token.revoke`, and approval bridging (`exec`/`plugin` `approval.requested`/`resolved` events → ClawFace approval cards, with approve/deny via `exec.approval.resolve`/`plugin.approval.resolve`). The exact Gateway approval payload field names are extracted defensively in `services/transport/normalize.ts` and should be confirmed against a live Gateway.
 - Future hosted relay/control-plane work must follow [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/SCALING_AND_UNIT_ECONOMICS.md](docs/SCALING_AND_UNIT_ECONOMICS.md). Do not duplicate those decisions here.
 
 ## Ignore

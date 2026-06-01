@@ -464,7 +464,7 @@ Issue index entries for CF-010..CF-013 are kept in the index for traceability an
 
 ### CF-015 - OpenClaw approval bridge
 
-**Status:** TODO
+**Status:** IMPLEMENTED (pending live-Gateway validation of OpenClaw-owned approval payload field names — CF-026)
 **Priority:** P1
 **Milestone:** Post-M1
 **Epic:** F - OpenClaw Local MVP
@@ -478,12 +478,14 @@ Map OpenClaw tool/action approval requests into ClawFace approval cards and send
 
 #### Acceptance criteria
 
-- [ ] Gateway transport converts OpenClaw approval requests into ClawFace `approval_request` messages with stable `reqId`, human-readable title/body, risk level if available, and expiry
-- [ ] ClawFace approve/deny actions call back into the correct OpenClaw pending approval via Gateway RPC
-- [ ] Duplicate approval decisions are ignored by `reqId`
-- [ ] Expired approval requests cannot be approved from ClawFace
-- [ ] Approval results are reflected in the originating ClawFace thread
-- [ ] README local MVP instructions include a safe approval test
+- [x] Gateway transport converts OpenClaw approval requests into ClawFace `approval_request` messages with stable `reqId`, human-readable title/body, risk level if available, and expiry — `normalizeGatewayApprovalRequest` in `services/transport/normalize.ts`
+- [x] ClawFace approve/deny actions call back into the correct OpenClaw pending approval via Gateway RPC — `resolveApproval` picks `exec.approval.resolve` vs `plugin.approval.resolve` from the tracked approval kind
+- [x] Duplicate approval decisions are ignored by `reqId` — store `resolveApproval` rejects non-pending approvals; transport sends an `idempotencyKey`
+- [x] Expired approval requests cannot be approved from ClawFace — `isPendingApproval` expiry check + default 5-minute expiry when the Gateway omits one
+- [x] Approval results are reflected in the originating ClawFace thread — `*.approval.resolved` replays the resolved status onto the card keyed by `reqId`
+- [x] README local MVP instructions include a safe approval test — M1 test path step 6
+
+**Remaining for full closure (CF-026):** the OpenClaw approval payload schema is OpenClaw-owned and was not observed locally during M1; field extraction is defensive (candidate key lists in `normalize.ts`) and the resolve param shape (`{ requestId, decision, idempotencyKey }`) must be confirmed against a live Gateway with `operator.approvals` scope.
 
 #### Test plan
 
