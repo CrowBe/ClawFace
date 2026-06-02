@@ -39,7 +39,7 @@ const CLIENT_DISPLAY_NAME = 'ClawFace Mobile';
 const CLIENT_VERSION = 'cf-026-gateway-transport';
 const CLIENT_MODE = 'probe';
 const ROLE = 'operator';
-const DEFAULT_SCOPES = ['operator.read', 'operator.write', 'operator.pairing'];
+const DEFAULT_SCOPES = ['operator.read', 'operator.write', 'operator.pairing', 'operator.approvals'];
 
 function makeId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -230,6 +230,10 @@ export class OpenClawGatewayTransport implements AgentTransport {
   private lastGatewayActivityAt = new Map<string, number>();
   private deviceIds = new Map<string, string>();
   private subscribedThreads = new Map<string, Set<string>>();
+  // Maps an opaque Gateway approval request id to its kind so resolveApproval
+  // can pick the correct resolve RPC (exec vs plugin). Routing metadata only;
+  // the app-facing approval normalization lives in the normalizer.
+  private approvalKinds = new Map<string, Map<string, 'exec' | 'plugin'>>();
 
   subscribe(listener: TransportListener): () => void {
     this.listeners.add(listener);
@@ -255,6 +259,7 @@ export class OpenClawGatewayTransport implements AgentTransport {
       this.sockets.set(agent.id, ws);
       this.pending.set(agent.id, new Map());
       this.subscribedThreads.set(agent.id, new Set());
+      this.approvalKinds.set(agent.id, new Map());
 
       const connectTimeout = setTimeout(() => {
         reject(new Error('Timed out waiting for OpenClaw Gateway hello-ok'));
@@ -369,6 +374,8 @@ export class OpenClawGatewayTransport implements AgentTransport {
           this.hydrateGatewaySessions(agent.id).catch(() => {});
           return;
         }
+
+        this.trackApprovalKind(agent.id, frame);
 
         const result = normalizer.normalize(frame);
         result.issues.forEach(issue => this.emit({
@@ -501,6 +508,7 @@ export class OpenClawGatewayTransport implements AgentTransport {
     this.policies.delete(agentId);
     this.stopGatewayTickWatch(agentId);
     this.subscribedThreads.delete(agentId);
+    this.approvalKinds.delete(agentId);
     this.agents.delete(agentId);
     this.options.delete(agentId);
     this.deviceIds.delete(agentId);
@@ -588,12 +596,39 @@ export class OpenClawGatewayTransport implements AgentTransport {
     });
   }
 
-  async resolveApproval(): Promise<void> {
-    this.emit({
-      type: 'transport_notice',
-      level: 'warning',
-      message: 'OpenClaw Gateway approval resolution is not implemented yet',
-    });
+  private trackApprovalKind(agentId: string, frame: unknown): void {
+    if (!isObject(frame) || frame.type !== 'event' || typeof frame.event !== 'string') return;
+    const match = /^(exec|plugin)\.approval\.requested$/.exec(frame.event);
+    if (!match) return;
+    const kind = match[1] as 'exec' | 'plugin';
+    if (!isObject(frame.payload)) return;
+    const detail = isObject(frame.payload.request) ? frame.payload.request : frame.payload;
+    const reqId = readString(detail.requestId) ?? readString(detail.approvalId) ?? readString(detail.reqId) ?? readString(detail.id);
+    if (!reqId) return;
+    const kinds = this.approvalKinds.get(agentId) ?? new Map<string, 'exec' | 'plugin'>();
+    kinds.set(reqId, kind);
+    this.approvalKinds.set(agentId, kinds);
+  }
+
+  async resolveApproval(agentId: string, _threadId: string, _msgId: number, reqId: string, decision: 'approved' | 'denied'): Promise<void> {
+    const kind = this.approvalKinds.get(agentId)?.get(reqId) ?? 'exec';
+    const method = kind === 'plugin' ? 'plugin.approval.resolve' : 'exec.approval.resolve';
+    try {
+      await this.request(agentId, method, {
+        requestId: reqId,
+        decision: decision === 'approved' ? 'approve' : 'deny',
+        idempotencyKey: makeId(),
+      });
+    } catch (err) {
+      this.emit({
+        type: 'transport_notice',
+        level: 'error',
+        message: err instanceof Error
+          ? `OpenClaw Gateway approval resolution failed: ${err.message}`
+          : 'OpenClaw Gateway approval resolution failed',
+      });
+      throw err;
+    }
   }
 
   async listSessions(agentId: string): Promise<void> {

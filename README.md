@@ -53,9 +53,10 @@ Use this checklist from a clean start when validating CF-016.
 3. Paste a Gateway pairing payload into ClawFace with `transport: "openclaw-gateway"`, host `127.0.0.1`, port `18789`, and a Gateway token or issued device token.
 4. Expected in ClawFace: pairing succeeds only after Gateway connect/auth completes, the Trusted Agent shows Gateway-derived Agent Context where available, and recent Gateway sessions appear as Threads keyed by the full opaque Gateway session key.
 5. Send one message in a Thread. Expected: the response comes back via OpenClaw Gateway events in the same Thread. Tool activity, when emitted by OpenClaw, should render as real tool chips driven by `session.tool` or session-keyed `agent` tool streams.
-6. Unpair. Expected: when ClawFace has a connected signed device identity, it calls `device.token.revoke`, deletes local Gateway token/seed material, and reconnect with the revoked issued token is rejected. Token-only interim pairing falls back to local deletion with a warning.
+6. Trigger a harmless approval-requiring action from the bound session (e.g. a command/tool that needs `exec` approval). Expected: an approval card appears in the matching Thread; tapping **Approve** sends exactly one `exec.approval.resolve` (or `plugin.approval.resolve`) to OpenClaw and the action proceeds; a duplicate tap is ignored by `reqId`; an approval left until `expiresAt` can no longer be approved. Connect with `operator.approvals` scope (now a default) for the approval events to flow.
+7. Unpair. Expected: when ClawFace has a connected signed device identity, it calls `device.token.revoke`, deletes local Gateway token/seed material, and reconnect with the revoked issued token is rejected. Token-only interim pairing falls back to local deletion with a warning.
 
-Known M1 limits: approvals are intentionally Post-M1, and tokenless signed pairing is implemented client-side but currently unvalidated against the local Gateway auth configuration when it reports `AUTH_TOKEN_MISSING`.
+Known M1 limits: tokenless signed pairing is implemented client-side but currently unvalidated against the local Gateway auth configuration when it reports `AUTH_TOKEN_MISSING`. Approval bridging is wired (CF-015) but the exact OpenClaw approval payload field names are extracted defensively and should be confirmed against your live Gateway — capture real event shapes with `OPENCLAW_GATEWAY_SCOPES=...,operator.approvals npm run gateway:discover` before relying on it.
 
 ### OpenClaw Gateway
 
@@ -104,7 +105,7 @@ To validate Gateway token revocation for the probe's signed device identity, add
 
 Known limitations:
 
-- Gateway approval resolution currently surfaces a transport notice only; full approval bridging is Post-M1 (see CF-015).
+- Gateway approval bridging is implemented (CF-015): `exec`/`plugin` `approval.requested`/`resolved` events normalize into ClawFace approval cards, and approve/deny calls `exec.approval.resolve`/`plugin.approval.resolve` with an idempotency key. The exact OpenClaw approval payload schema is OpenClaw-owned and extracted defensively in `services/transport/normalize.ts`; confirm field names against a live Gateway. Resolution failures surface as transport notices and re-throw.
 - Device token revocation calls `device.token.revoke` only when a connected signed device identity is available; interim token-only pairing falls back to local credential deletion with a warning.
 - Authenticated Gateway discovery, send, event capture, and signed-device token revocation probes have passed locally. Full mobile-app validation remains tracked by CF-026.
 

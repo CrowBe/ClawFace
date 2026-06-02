@@ -330,6 +330,114 @@ function normalizeGatewaySessionTool(payload: unknown): TransportNormalizationRe
 }
 
 
+// --- Approval bridging (CF-015) ---------------------------------------------
+// OpenClaw owns the exact approval payload schema; these helpers extract the
+// fields ClawFace needs across the likely names with safe fallbacks. Adjust the
+// candidate key lists here once the real shapes are captured against a live
+// Gateway (see scripts/openclaw-gateway-discover.js + README approval test).
+
+function pickString(source: Record<string, unknown>, keys: string[]): string | undefined {
+  for (const key of keys) {
+    const value = source[key];
+    if (isString(value) && value.trim().length > 0) return value;
+  }
+  return undefined;
+}
+
+function stringArray(value: unknown): string[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const out = value.filter(isString);
+  return out.length > 0 ? out : undefined;
+}
+
+// Some Gateway approval events may nest the detail under request/approval/data;
+// flatten into a single lookup where top-level keys win.
+function approvalDetail(payload: Record<string, unknown>): Record<string, unknown> {
+  for (const key of ['request', 'approval', 'detail', 'data']) {
+    const nested = payload[key];
+    if (isObject(nested)) return { ...nested, ...payload };
+  }
+  return payload;
+}
+
+const APPROVAL_ID_KEYS = ['requestId', 'approvalId', 'reqId', 'id'];
+
+function approvalExpiry(detail: Record<string, unknown>): number {
+  if (isNumber(detail.expiresAt)) return detail.expiresAt;
+  const ttl = isNumber(detail.expiresInMs) ? detail.expiresInMs : isNumber(detail.ttlMs) ? detail.ttlMs : undefined;
+  if (ttl != null) return Date.now() + ttl;
+  // Default expiry keeps "expired approvals cannot be approved" working even if
+  // the Gateway omits an explicit deadline (matches the 5-minute seed convention).
+  return Date.now() + 5 * 60 * 1000;
+}
+
+function approvalDecision(detail: Record<string, unknown>): 'approved' | 'denied' | undefined {
+  if (typeof detail.approved === 'boolean') return detail.approved ? 'approved' : 'denied';
+  const raw = pickString(detail, ['decision', 'resolution', 'outcome', 'status', 'result']);
+  if (!raw) return undefined;
+  const v = raw.toLowerCase();
+  if (['approve', 'approved', 'allow', 'allowed', 'accept', 'accepted', 'yes', 'granted'].includes(v)) return 'approved';
+  if (['deny', 'denied', 'reject', 'rejected', 'block', 'blocked', 'no', 'declined'].includes(v)) return 'denied';
+  return undefined;
+}
+
+function normalizeGatewayApprovalRequest(payload: unknown, kind: 'exec' | 'plugin'): TransportNormalizationResult {
+  const rawType = `${kind}.approval.requested`;
+  if (!isObject(payload)) return malformed(rawType, `Gateway ${rawType} event requires an object payload`);
+
+  const detail = approvalDetail(payload);
+  const sessionKey = pickString(payload, ['sessionKey']) ?? pickString(detail, ['sessionKey']);
+  if (!sessionKey) return malformed(rawType, `Gateway ${rawType} requires sessionKey for ClawFace thread routing`);
+
+  const reqId = pickString(detail, APPROVAL_ID_KEYS);
+  if (!reqId) return malformed(rawType, `Gateway ${rawType} requires an opaque approval request id`);
+
+  const tool = pickString(detail, ['tool', 'toolName', 'command', 'name', 'action']);
+  const summary = pickString(detail, ['summary', 'title', 'reason', 'description', 'message'])
+    ?? (tool ? `Approve ${tool}` : `${kind === 'plugin' ? 'Plugin' : 'Command'} approval requested`);
+  const risk = pickString(detail, ['risk', 'riskLevel', 'severity']) ?? (kind === 'exec' ? 'shell' : undefined);
+
+  const message: Message = {
+    id: stableNumericId(`${sessionKey}|approval|${reqId}`),
+    role: 'approval',
+    reqId,
+    tool,
+    summary,
+    risk,
+    expiresAt: approvalExpiry(detail),
+    files: stringArray(detail.files ?? detail.paths),
+    status: 'pending',
+    t: 'now',
+  };
+
+  return { controls: [], issues: [], events: [{ type: 'approval_request', threadId: sessionKey, message }] };
+}
+
+function normalizeGatewayApprovalResolved(payload: unknown, kind: 'exec' | 'plugin'): TransportNormalizationResult {
+  const rawType = `${kind}.approval.resolved`;
+  if (!isObject(payload)) return malformed(rawType, `Gateway ${rawType} event requires an object payload`);
+
+  const detail = approvalDetail(payload);
+  const sessionKey = pickString(payload, ['sessionKey']) ?? pickString(detail, ['sessionKey']);
+  const reqId = pickString(detail, APPROVAL_ID_KEYS);
+  if (!sessionKey || !reqId) return malformed(rawType, `Gateway ${rawType} requires sessionKey and approval request id`);
+
+  const decision = approvalDecision(detail);
+  if (!decision) return malformed(rawType, `Gateway ${rawType} requires a recognizable decision`);
+
+  // Replay so the store updates the existing card's status (keyed by reqId)
+  // without re-notifying. The message id is deterministic so it also matches by id.
+  const message: Message = {
+    id: stableNumericId(`${sessionKey}|approval|${reqId}`),
+    role: 'approval',
+    reqId,
+    status: decision,
+    t: 'now',
+  };
+
+  return { controls: [], issues: [], events: [{ type: 'approval_request', threadId: sessionKey, message, replay: true }] };
+}
+
 function malformed(rawType: string | undefined, message: string): TransportNormalizationResult {
   return {
     events: [],
@@ -354,6 +462,14 @@ export class GatewayTransportEventNormalizer {
           return normalizeGatewaySessionMessage(raw.payload);
         case 'session.tool':
           return normalizeGatewaySessionTool(raw.payload);
+        case 'exec.approval.requested':
+          return normalizeGatewayApprovalRequest(raw.payload, 'exec');
+        case 'plugin.approval.requested':
+          return normalizeGatewayApprovalRequest(raw.payload, 'plugin');
+        case 'exec.approval.resolved':
+          return normalizeGatewayApprovalResolved(raw.payload, 'exec');
+        case 'plugin.approval.resolved':
+          return normalizeGatewayApprovalResolved(raw.payload, 'plugin');
         case 'sessions.changed':
           return { controls: [], events: [], issues: [{ reason: 'unknown_type', rawType: 'sessions.changed', message: 'sessions.changed: transport should refresh session list' }] };
         case 'heartbeat':
